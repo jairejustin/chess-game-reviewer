@@ -1,6 +1,7 @@
 mod pgn;
 mod commands;
 mod engine;
+mod models;
 
 use crate::commands::{analyze_game};
 
