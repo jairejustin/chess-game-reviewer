@@ -1,49 +1,45 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
+import { invoke } from "@tauri-apps/api/core";
+import { StandardChessboard } from "./components/Board";
+import { useGameStore } from "./store/useGameStore";
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
-
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+  const { moves, activePly, setActivePly } = useGameStore();
+  const currentFen = moves[activePly]?.fen ?? "start";
+  const canGoBack = activePly > 0;
+  const canGoForward = activePly < moves.length - 1;
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
+    <main>
+      <StandardChessboard
+        fen={currentFen}
+        config={{ viewOnly: true }}
+      />
+      <button
+        onClick={() => setActivePly(activePly - 1)}
+        disabled={!canGoBack}
       >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
+        {"<"}
+      </button>
+      <button
+        onClick={() => setActivePly(activePly + 1)}
+        disabled={!canGoForward}
+      >
+        {">"}
+      </button>
+      <button onClick={async () => {
+          const pgn = `[Event "Test"]
+        [White "Player1"]
+        [Black "Player2"]
+        [Result "1-0"]
+
+        1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. b4 Bxb4 5. c3 Ba5 6. d4 exd4 7. O-O d3 8. Qb3 Qf6 9. e5 Qg6 10. Re1 Nge7 11. Ba3 b5 12. Qxb5 Rb8 13. Qa4 Bb6 14. Nbd2 Bb7 15. Ne4 Qf5 16. Bxd3 Qh5 17. Nf6+ gxf6 18. exf6 Rg8 19. Rad1 Qxf3 20. Rxe7+ Nxe7 21. Qxd7+ Kxd7 22. Bf5+ Ke8 23. Bd7+ Kf8 24. Bxe7# 1-0`;
+
+          const result = await invoke("analyze_game", { pgn });
+          console.log(result);
+        }}>
+          Run Full Analysis
+      </button>
     </main>
   );
 }
