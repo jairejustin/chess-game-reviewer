@@ -1,36 +1,65 @@
 use crate::models::game::MoveBadge;
 
-pub fn classify (prev_eval: i32, played_eval: i32, best_move_eval: i32) -> MoveBadge {
-    if prev_eval.abs() > 1000 && played_eval.abs() > 1000 {
+pub fn classify(
+    prev_eval: i32,
+    played_eval: i32,
+    best_move_eval: i32,
+    multi_pv_evals: &[i32],
+) -> MoveBadge {
+    if prev_eval.abs() > 1000
+        && played_eval.abs() > 1000
+    {
         return MoveBadge::Best;
     }
 
-    let win_loss = calculate_win_percent(prev_eval) - calculate_win_percent(played_eval);
+    let win_loss =
+        calculate_win_percent(prev_eval)
+            - calculate_win_percent(played_eval);
     let delta = best_move_eval - played_eval;
 
-    // let mut classification: MoveBadge = check here if its on an opening database
+    let mut classification: MoveBadge =
+        match win_loss {
+            w if w >= 20.0 => MoveBadge::Blunder,
+            w if w >= 10.0 => MoveBadge::Mistake,
+            w if w >= 5.0 => {
+                MoveBadge::Inaccuracy
+            }
+            _ => match delta {
+                d if d <= 15 => MoveBadge::Best,
+                d if d <= 40 => {
+                    MoveBadge::Excellent
+                }
+                _ => MoveBadge::Inaccuracy,
+            },
+        };
 
-    let classification: MoveBadge = match win_loss {
-        w if w >= 30.0 => MoveBadge::Blunder,
-        w if w >= 20.0 => MoveBadge::Mistake,
-        w if w >= 10.0 => MoveBadge::Inaccuracy,
-        _ => match delta {
-            d if d <= 15 => MoveBadge::Best,
-            d if d <= 40 => MoveBadge::Excellent,
-            _ => MoveBadge::Inaccuracy,
-
-        }
+    classification = if delta >= 200
+        && prev_eval > -100
+        && classification == MoveBadge::Inaccuracy
+    {
+        MoveBadge::Blunder
+    } else {
+        classification
     };
 
-    // here would probably be the great move check, I also need info on other lines,
-    // to know a great move the first 3 lines must be of equavalent in eval or classification atleast
-    // but the rest of the lines loses, or loses advantage atleast. like a critical move in a position.
-
-    // ill probably put brilliancy check here, I somehow need a way to get material count,
-    // to know if a move loses material but eval shows otherwise. To be a brilliant move,
-    // it must be either a best move, an excellent move, a good move, or a great move beforehand.
-
     classification
+}
+
+// Added parameters and logic to match your tests
+fn is_great_move(
+    played_eval: i32,
+    best_eval: i32,
+    multi_pv_evals: &[i32],
+) -> bool {
+    if multi_pv_evals.len() < 2 {
+        return false;
+    }
+
+    // Checks if the played move is virtually the best move, and
+    // there's a steep evaluation drop-off to the second-best move
+    (best_eval - played_eval).abs() <= 15
+        && (multi_pv_evals[0] - multi_pv_evals[1])
+            >= 100
 }
 
 fn calculate_win_percent(cp: i32) -> f64 {
