@@ -5,6 +5,7 @@ pub fn classify(
     played_eval: i32,
     best_move_eval: i32,
     multi_pv_evals: &[i32],
+    material_delta: i32,
 ) -> MoveBadge {
     if prev_eval.abs() > 1000
         && played_eval.abs() > 1000
@@ -16,6 +17,14 @@ pub fn classify(
         calculate_win_percent(prev_eval)
             - calculate_win_percent(played_eval);
     let delta = best_move_eval - played_eval;
+
+    // Brilliant: position dropped in raw material (sacrificed), but engine confirms move is near-best
+    if win_loss < 5.0
+        && delta <= 40
+        && material_delta < 0
+    {
+        return MoveBadge::Brilliant;
+    }
 
     let mut classification: MoveBadge =
         match win_loss {
@@ -33,6 +42,19 @@ pub fn classify(
             },
         };
 
+    // Great: move is near-best and there is a steep drop-off to the next best line
+    if (classification == MoveBadge::Best
+        || classification == MoveBadge::Excellent)
+        && is_great_move(
+            played_eval,
+            best_move_eval,
+            multi_pv_evals,
+        )
+    {
+        classification = MoveBadge::Great;
+    }
+
+    // Practical blunder checks
     classification = if delta >= 200
         && prev_eval > -100
         && classification == MoveBadge::Inaccuracy
