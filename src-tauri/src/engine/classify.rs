@@ -45,7 +45,6 @@ pub fn classify(
     classification
 }
 
-// Added parameters and logic to match your tests
 fn is_great_move(
     played_eval: i32,
     best_eval: i32,

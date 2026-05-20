@@ -1,9 +1,9 @@
-mod pgn;
 mod commands;
 mod engine;
 mod models;
+mod pgn;
 
-use crate::commands::{analyze_game};
+use crate::commands::analyze_game;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

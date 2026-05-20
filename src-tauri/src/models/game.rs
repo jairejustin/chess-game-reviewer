@@ -1,7 +1,6 @@
 use serde::Serialize;
 
-
-#[derive(Serialize)]
+#[derive(Serialize, Debug, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum MoveBadge {
     Book,
@@ -13,7 +12,6 @@ pub enum MoveBadge {
     Mistake,
     Blunder,
 }
-
 
 #[derive(Serialize)]
 pub struct AnalyzedMove {
@@ -54,5 +52,3 @@ pub struct AnalysisSummary {
     pub move_counts: MoveCounts,
     pub metadata: GameMetadata,
 }
-
-
