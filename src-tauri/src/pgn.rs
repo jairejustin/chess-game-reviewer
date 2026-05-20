@@ -56,3 +56,50 @@ impl Visitor for PgnVisitor {
         self.positions.clone()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pgn_reader::Reader;
+    use std::io::Cursor;
+
+    #[test]
+    fn parses_four_move_game_into_correct_position_count() {
+        let pgn = "1. e4 e5 2. Nf3 Nc6";
+        let mut visitor = PgnVisitor::new();
+        let mut reader = Reader::new(Cursor::new(pgn.as_bytes()));
+        let positions = reader.read_game(&mut visitor).unwrap().unwrap();
+        assert_eq!(positions.len(), 4);
+    }
+
+    #[test]
+    fn first_move_produces_correct_fen() {
+        let pgn = "1. e4";
+        let mut visitor = PgnVisitor::new();
+        let mut reader = Reader::new(Cursor::new(pgn.as_bytes()));
+        let positions = reader.read_game(&mut visitor).unwrap().unwrap();
+        assert_eq!(
+            positions[0].1,
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"
+        );
+    }
+
+    #[test]
+    fn san_strings_match_played_moves() {
+        let pgn = "1. e4 e5";
+        let mut visitor = PgnVisitor::new();
+        let mut reader = Reader::new(Cursor::new(pgn.as_bytes()));
+        let positions = reader.read_game(&mut visitor).unwrap().unwrap();
+        assert_eq!(positions[0].0, "e4");
+        assert_eq!(positions[1].0, "e5");
+    }
+
+    #[test]
+    fn handles_empty_pgn_gracefully() {
+        let pgn = "";
+        let mut visitor = PgnVisitor::new();
+        let mut reader = Reader::new(Cursor::new(pgn.as_bytes()));
+        let result = reader.read_game(&mut visitor).unwrap();
+        assert!(result.is_none());
+    }
+}

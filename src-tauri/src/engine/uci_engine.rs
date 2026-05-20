@@ -110,3 +110,72 @@ impl UciEngine {
         words.get(1).map(|&s| s.to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_cp_score_and_pv_from_info_line() {
+        let line = "info depth 10 seldepth 11 multipv 1 score cp 30 nodes 32656 pv d2d4 e7e6";
+        let result =
+            UciEngine::parse_info_line(line);
+        assert!(result.is_some());
+        let (multipv, eval, pv) = result.unwrap();
+        assert_eq!(multipv, 1);
+        assert_eq!(eval, Evaluation::Cp(30));
+        assert_eq!(pv, vec!["d2d4", "e7e6"]);
+    }
+
+    #[test]
+    fn parses_mate_score_from_info_line() {
+        let line = "info depth 5 multipv 1 score mate 3 pv e1e8 d8e8 f1e1";
+        let result =
+            UciEngine::parse_info_line(line);
+        assert!(result.is_some());
+        let (_, eval, _) = result.unwrap();
+        assert_eq!(eval, Evaluation::Mate(3));
+    }
+
+    #[test]
+    fn returns_none_for_info_line_without_score()
+    {
+        let line = "info depth 10 nodes 32656 nps 375356";
+        assert!(UciEngine::parse_info_line(line)
+            .is_none());
+    }
+
+    #[test]
+    fn returns_none_for_non_info_line() {
+        let line = "bestmove e2e4 ponder c7c5";
+        assert!(UciEngine::parse_info_line(line)
+            .is_none());
+    }
+
+    #[test]
+    fn parses_bestmove_from_valid_line() {
+        let line = "bestmove e2e4 ponder c7c5";
+        assert_eq!(
+            UciEngine::parse_bestmove(line),
+            Some("e2e4".to_string())
+        );
+    }
+
+    #[test]
+    fn returns_none_for_non_bestmove_line() {
+        let line = "info depth 10 score cp 30";
+        assert_eq!(
+            UciEngine::parse_bestmove(line),
+            None
+        );
+    }
+
+    #[test]
+    fn parses_bestmove_without_ponder() {
+        let line = "bestmove d2d4";
+        assert_eq!(
+            UciEngine::parse_bestmove(line),
+            Some("d2d4".to_string())
+        );
+    }
+}

@@ -34,5 +34,52 @@ pub fn classify (prev_eval: i32, played_eval: i32, best_move_eval: i32) -> MoveB
 }
 
 fn calculate_win_percent(cp: i32) -> f64 {
-    50.0 + 50.0 * (2.0 / (1.0 + (-0.00368 * cp as f64).exp()) - 1.0)
+    50.0 + 50.0
+        * (2.0
+            / (1.0
+                + (-0.00368 * cp as f64).exp())
+            - 1.0)
+}
+
+#[test]
+fn brilliant_when_sacrifice_confirmed_by_engine()
+{
+    assert_eq!(
+        classify(300, 50, 80, &[80, 20, -50]),
+        MoveBadge::Brilliant
+    );
+}
+
+#[test]
+fn not_brilliant_without_material_sacrifice() {
+    assert_eq!(
+        classify(50, 45, 80, &[80, 60, 40]),
+        MoveBadge::Excellent
+    );
+}
+
+#[test]
+fn great_when_only_move_maintaining_equality() {
+    assert!(is_great_move(
+        28,
+        30,
+        &[30, -150, -200]
+    ));
+}
+
+#[test]
+fn not_great_when_multiple_good_moves_exist() {
+    assert!(!is_great_move(
+        28,
+        30,
+        &[30, 25, 20]
+    ));
+}
+
+#[test]
+fn best_when_played_equals_best_move() {
+    assert_eq!(
+        classify(30, 28, 28, &[28, 10, -20]),
+        MoveBadge::Best
+    );
 }
