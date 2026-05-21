@@ -1,5 +1,6 @@
 mod commands;
 mod engine;
+mod math;
 mod models;
 mod pgn;
 

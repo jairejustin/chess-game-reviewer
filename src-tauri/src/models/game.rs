@@ -12,6 +12,8 @@ pub enum MoveBadge {
     Inaccuracy,
     Mistake,
     Blunder,
+    Miss,
+    Forced,
 }
 
 #[derive(Serialize)]
@@ -27,15 +29,6 @@ pub struct AnalyzedMove {
 }
 
 #[derive(Serialize)]
-pub struct GameMetadata {
-    pub white: String,
-    pub black: String,
-    pub date: String,
-    pub result: String,
-    pub event: Option<String>,
-}
-
-#[derive(Serialize)]
 pub struct MoveCounts {
     pub brilliant: u32,
     pub great: u32,
@@ -45,6 +38,18 @@ pub struct MoveCounts {
     pub inaccuracy: u32,
     pub mistake: u32,
     pub blunder: u32,
+    pub miss: u32,
+    pub book: u32,
+    pub forced: u32,
+}
+
+#[derive(Serialize)]
+pub struct GameMetadata {
+    pub white: String,
+    pub black: String,
+    pub date: String,
+    pub result: String,
+    pub event: Option<String>,
 }
 
 #[derive(Serialize)]
