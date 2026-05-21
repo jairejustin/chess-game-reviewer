@@ -8,33 +8,24 @@ pub fn classify(
     material_delta: i32,
 ) -> MoveBadge {
     let delta = best_move_eval - played_eval;
-
-    // If the position is totally decided (+/- 10 pawns), suppress noise.
-    // Only award "Best" if they exactly matched the top engine line (delta == 0).
-    if prev_eval.abs() > 1000
-        && played_eval.abs() > 1000
-    {
-        if delta == 0 {
-            return MoveBadge::Best;
-        } else {
-            return MoveBadge::Excellent;
-        }
-    }
-
     let win_loss =
         calculate_win_percent(prev_eval)
             - calculate_win_percent(played_eval);
 
-    // Brilliant Move
-    if win_loss < 5.0
-        && delta <= 40
-        && material_delta < 0
+    // Base Classification
+    let mut classification = if prev_eval.abs()
+        > 1000
+        && played_eval.abs() > 1000
     {
-        return MoveBadge::Brilliant;
-    }
-
-    // Base Classification by Win Percentage
-    let mut classification: MoveBadge =
+        // Noise Suppressor: If the position is totally decided (+/- 10 pawns), suppress noise.
+        // Only award "Best" if they exactly matched the top engine line (delta == 0).
+        if delta == 0 {
+            MoveBadge::Best
+        } else {
+            MoveBadge::Excellent
+        }
+    } else {
+        // Base Classification by Win Percentage Drop
         match win_loss {
             w if w >= 20.0 => MoveBadge::Blunder,
             w if w >= 10.0 => MoveBadge::Mistake,
@@ -42,7 +33,7 @@ pub fn classify(
                 MoveBadge::Inaccuracy
             }
 
-            // Base Classification by Evaluation Delta
+            // Base Classification by Evaluation Delta (when win_loss < 5%)
             _ => match delta {
                 d if d <= 15 => MoveBadge::Best,
                 d if d <= 40 => {
@@ -51,11 +42,16 @@ pub fn classify(
                 d if d <= 80 => MoveBadge::Good,
                 _ => MoveBadge::Inaccuracy,
             },
-        };
+        }
+    };
+
+    // Overrides
 
     // Great Move Override
+    // Suppress Great moves in totally winning/losing positions
     if (classification == MoveBadge::Best
         || classification == MoveBadge::Excellent)
+        && prev_eval.abs() <= 1000
         && is_great_move(
             played_eval,
             best_move_eval,
@@ -63,6 +59,15 @@ pub fn classify(
         )
     {
         classification = MoveBadge::Great;
+    }
+
+    // Brilliant Move Override
+    // Requires a material sacrifice of at least 2 points (exchange or minor piece)
+    if win_loss < 5.0
+        && delta <= 40
+        && material_delta <= -2
+    {
+        classification = MoveBadge::Brilliant;
     }
 
     classification
@@ -77,11 +82,18 @@ pub fn is_great_move(
         return false;
     }
 
-    // Checks if the played move is virtually the best move, and
-    // there's a steep evaluation drop-off to the second-best move
-    (best_eval - played_eval).abs() <= 15
-        && (multi_pv_evals[0] - multi_pv_evals[1])
-            >= 100
+    // Played move must be best or nearly best
+    let played_best =
+        (best_eval - played_eval).abs() <= 15;
+
+    // The second best move results in a massive drop in Win Probability (>= 10%)
+    let win_loss_to_second_best =
+        calculate_win_percent(best_eval)
+            - calculate_win_percent(
+                multi_pv_evals[1],
+            );
+
+    played_best && win_loss_to_second_best >= 10.0
 }
 
 fn calculate_win_percent(cp: i32) -> f64 {
@@ -119,6 +131,7 @@ mod tests {
     fn best_when_position_decided_and_played_engine_line(
     ) {
         // Delta is 0, they matched the exact top line in a winning position.
+        // Will not be upgraded to Great because prev_eval > 1000.
         assert_eq!(
             classify(
                 1200,
@@ -143,7 +156,7 @@ mod tests {
                 290,
                 &[290, 20, -50],
                 -3
-            ),
+            ), // -3 material is <= -2
             MoveBadge::Brilliant
         );
     }
@@ -232,7 +245,7 @@ mod tests {
         );
     }
 
-    // --- Delta Fallback Thresholds (Now testing 'Good') ---
+    // --- Delta Fallback Thresholds ---
 
     #[test]
     fn best_when_played_equals_best_move() {
@@ -255,12 +268,9 @@ mod tests {
             MoveBadge::Excellent
         );
     }
-    
+
     #[test]
     fn good_by_delta() {
-        // Delta is 60 (<= 80).
-        // By testing at a higher eval (+900 to +840), the win probability drop is < 1%,
-        // which bypasses the 5% Inaccuracy trigger and correctly tests the delta match block.
         assert_eq!(
             classify(
                 900,
@@ -275,8 +285,6 @@ mod tests {
 
     #[test]
     fn inaccuracy_by_delta() {
-        // Win probability drop from +900 to +800 is almost 0%.
-        // But delta is 100 (> 80).
         assert_eq!(
             classify(
                 900,
