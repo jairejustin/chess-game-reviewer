@@ -43,7 +43,7 @@ pub struct MoveCounts {
     pub forced: u32,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct GameMetadata {
     pub white: String,
     pub black: String,

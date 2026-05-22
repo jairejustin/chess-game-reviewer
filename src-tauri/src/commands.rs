@@ -65,7 +65,7 @@ pub fn analyze_game(
     let mut reader =
         Reader::new(Cursor::new(pgn.as_bytes()));
 
-    let positions =
+    let (metadata, positions) =
         match reader.read_game(&mut visitor) {
             Ok(Some(p)) => p,
             _ => {
@@ -250,13 +250,7 @@ pub fn analyze_game(
         white_accuracy: 100.0,
         black_accuracy: 100.0,
         move_counts,
-        metadata: GameMetadata {
-            white: "White".to_string(),
-            black: "Black".to_string(),
-            date: "1970-01-01".to_string(),
-            result: "*".to_string(),
-            event: None,
-        },
+        metadata,
     };
 
     app.emit("analysis-complete", &summary)

@@ -1,4 +1,5 @@
-use pgn_reader::{SanPlus, Visitor};
+use crate::models::game::GameMetadata;
+use pgn_reader::{RawTag, SanPlus, Visitor};
 use shakmaty::fen::Fen;
 use shakmaty::{Chess, EnPassantMode, Position};
 use std::ops::ControlFlow;
@@ -6,6 +7,7 @@ use std::ops::ControlFlow;
 pub struct PgnVisitor {
     board: Chess,
     positions: Vec<(String, String)>,
+    metadata: GameMetadata,
 }
 
 impl PgnVisitor {
@@ -13,6 +15,13 @@ impl PgnVisitor {
         PgnVisitor {
             board: Chess::default(),
             positions: Vec::new(),
+            metadata: GameMetadata {
+                white: "Unknown".to_string(),
+                black: "Unknown".to_string(),
+                date: "????.??.??".to_string(),
+                result: "*".to_string(),
+                event: None,
+            },
         }
     }
 }
@@ -20,7 +29,9 @@ impl PgnVisitor {
 impl Visitor for PgnVisitor {
     type Tags = ();
     type Movetext = ();
-    type Output = Vec<(String, String)>;
+
+    type Output =
+        (GameMetadata, Vec<(String, String)>);
 
     fn begin_tags(
         &mut self,
@@ -28,6 +39,46 @@ impl Visitor for PgnVisitor {
     {
         self.board = Chess::default();
         self.positions = Vec::new();
+        self.metadata = GameMetadata {
+            white: "Unknown".to_string(),
+            black: "Unknown".to_string(),
+            date: "????.??.??".to_string(),
+            result: "*".to_string(),
+            event: None,
+        };
+        ControlFlow::Continue(())
+    }
+
+    fn tag(
+        &mut self,
+        _tags: &mut Self::Tags,
+        name: &[u8],
+        value: pgn_reader::RawTag<'_>,
+    ) -> ControlFlow<Self::Output> {
+        if let Ok(k) = std::str::from_utf8(name) {
+            if let Ok(v) = value.decode_utf8() {
+                let val = v.into_owned();
+                match k {
+                    "White" => {
+                        self.metadata.white = val
+                    }
+                    "Black" => {
+                        self.metadata.black = val
+                    }
+                    "Date" => {
+                        self.metadata.date = val
+                    }
+                    "Result" => {
+                        self.metadata.result = val
+                    }
+                    "Event" => {
+                        self.metadata.event =
+                            Some(val)
+                    }
+                    _ => {}
+                }
+            }
+        }
         ControlFlow::Continue(())
     }
 
@@ -68,7 +119,10 @@ impl Visitor for PgnVisitor {
         &mut self,
         _movetext: Self::Movetext,
     ) -> Self::Output {
-        self.positions.clone()
+        (
+            self.metadata.clone(),
+            self.positions.clone(),
+        )
     }
 }
 
@@ -86,10 +140,12 @@ mod tests {
         let mut reader = Reader::new(
             Cursor::new(pgn.as_bytes()),
         );
+        // Note: unpacking the tuple using .1 to get positions
         let positions = reader
             .read_game(&mut visitor)
             .unwrap()
-            .unwrap();
+            .unwrap()
+            .1;
         assert_eq!(positions.len(), 4);
     }
 
@@ -103,7 +159,8 @@ mod tests {
         let positions = reader
             .read_game(&mut visitor)
             .unwrap()
-            .unwrap();
+            .unwrap()
+            .1;
         assert_eq!(
             positions[0].1,
             "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"
@@ -120,21 +177,34 @@ mod tests {
         let positions = reader
             .read_game(&mut visitor)
             .unwrap()
-            .unwrap();
+            .unwrap()
+            .1;
         assert_eq!(positions[0].0, "e4");
         assert_eq!(positions[1].0, "e5");
     }
 
     #[test]
-    fn handles_empty_pgn_gracefully() {
-        let pgn = "";
+    fn parses_metadata_correctly() {
+        let pgn = "[White \"Magnus Carlsen\"]\n[Black \"Hikaru Nakamura\"]\n[Result \"1/2-1/2\"]\n\n1. e4 e5";
         let mut visitor = PgnVisitor::new();
         let mut reader = Reader::new(
             Cursor::new(pgn.as_bytes()),
         );
-        let result = reader
+
+        // Unpack the .0 to test metadata
+        let metadata = reader
             .read_game(&mut visitor)
-            .unwrap();
-        assert!(result.is_none());
+            .unwrap()
+            .unwrap()
+            .0;
+        assert_eq!(
+            metadata.white,
+            "Magnus Carlsen"
+        );
+        assert_eq!(
+            metadata.black,
+            "Hikaru Nakamura"
+        );
+        assert_eq!(metadata.result, "1/2-1/2");
     }
 }
