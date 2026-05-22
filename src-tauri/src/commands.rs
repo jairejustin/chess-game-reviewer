@@ -1,4 +1,7 @@
 use crate::engine::classify::classify;
+use crate::engine::see::{
+    capture_square, is_sacrifice,
+};
 use crate::engine::uci_engine::{
     Evaluation, UciEngine,
 };
@@ -7,7 +10,6 @@ use crate::models::game::{
     AnalysisSummary, AnalyzedMove, GameMetadata,
     MoveBadge, MoveCounts,
 };
-
 use crate::pgn::PgnVisitor;
 use pgn_reader::Reader;
 use std::io::Cursor;
@@ -16,46 +18,6 @@ use tauri::{AppHandle, Emitter};
 use shakmaty::{
     fen::Fen, CastlingMode, Chess, Position,
 };
-
-/// Extracts the 2-character destination square from a capture SAN.
-fn capture_square(san: &str) -> Option<&str> {
-    if let Some(x_idx) = san.find('x') {
-        let square_start = x_idx + 1;
-        let square_end = square_start + 2;
-        if square_end <= san.len() {
-            return Some(
-                &san[square_start..square_end],
-            );
-        }
-    }
-    None
-}
-
-pub fn calculate_material_balance(
-    fen: &str,
-) -> i32 {
-    let mut balance = 0;
-    // Extract just the board layout part of the FEN
-    for c in fen
-        .split(' ')
-        .next()
-        .unwrap_or("")
-        .chars()
-    {
-        match c {
-            'P' => balance += 1,
-            'N' | 'B' => balance += 3,
-            'R' => balance += 5,
-            'Q' => balance += 9,
-            'p' => balance -= 1,
-            'n' | 'b' => balance -= 3,
-            'r' => balance -= 5,
-            'q' => balance -= 9,
-            _ => {}
-        }
-    }
-    balance
-}
 
 #[tauri::command]
 pub fn analyze_game(
@@ -138,19 +100,6 @@ pub fn analyze_game(
             }
         };
 
-        let prev_material =
-            calculate_material_balance(&prev_fen);
-        let current_material =
-            calculate_material_balance(&fen);
-        let raw_material_delta =
-            current_material - prev_material;
-        let material_delta = if ply_count % 2 != 0
-        {
-            raw_material_delta
-        } else {
-            -raw_material_delta
-        };
-
         let best_eval = prev_eval;
         let normalized_cp = if ply_count % 2 != 0
         {
@@ -159,6 +108,7 @@ pub fn analyze_game(
             played_cp
         };
 
+        // Check for Forced Move
         let is_forced_move =
             Fen::from_ascii(prev_fen.as_bytes())
                 .ok()
@@ -173,6 +123,34 @@ pub fn analyze_game(
                 })
                 .unwrap_or(false);
 
+        // Check for Sacrifice using Static Exchange Evaluation
+        let current_pos_opt =
+            Fen::from_ascii(fen.as_bytes())
+                .ok()
+                .and_then(|f| {
+                    f.into_position::<Chess>(
+                        CastlingMode::Standard,
+                    )
+                    .ok()
+                });
+
+        let is_sacrifice_flag = if let Some(
+            ref pos,
+        ) =
+            current_pos_opt
+        {
+            let player_color =
+                if ply_count % 2 != 0 {
+                    shakmaty::Color::White
+                } else {
+                    shakmaty::Color::Black
+                };
+            is_sacrifice(pos, player_color)
+        } else {
+            false
+        };
+
+        // 3. Check for Obvious Recapture
         let prev_target =
             capture_square(&prev_san);
         let current_target = capture_square(&san);
@@ -181,13 +159,14 @@ pub fn analyze_game(
             && current_target.is_some()
             && prev_target == current_target;
 
-        let (classification, current_win_loss) = {
+        // Classify the move
+        let (classification, current_win_loss) =
             classify(
                 prev_eval,
                 normalized_cp,
                 best_eval,
                 &multi_pv_evals,
-                material_delta,
+                is_sacrifice_flag,
                 is_obvious_recapture,
                 prev_win_loss,
                 is_forced_move,
