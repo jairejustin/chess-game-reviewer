@@ -6,7 +6,7 @@ pub fn classify(
     played_eval: i32,
     best_move_eval: i32,
     multi_pv_evals: &[i32],
-    material_delta: i32,
+    is_sacrifice: bool,
     is_obvious_recapture: bool,
     prev_win_loss: f64,
     is_forced_move: bool,
@@ -20,7 +20,7 @@ pub fn classify(
         return (MoveBadge::Forced, win_loss);
     }
 
-    // 1. Base Classification
+    // Base Classification
     let mut classification = if prev_eval.abs()
         > 1000
         && played_eval.abs() > 1000
@@ -69,10 +69,11 @@ pub fn classify(
         classification = MoveBadge::Great;
     }
 
-    // Brilliant Move: Material sacrifice of at least 2 points
+    // Brilliant Move: SEE confirmed a hanging piece, and the engine eval is still good
     if win_loss < 5.0
         && delta <= 40
-        && material_delta <= -2
+        && is_sacrifice
+        && played_eval > -200
     {
         classification = MoveBadge::Brilliant;
     }
@@ -112,14 +113,12 @@ mod tests {
     #[test]
     fn excellent_when_position_decided_but_not_best_move(
     ) {
-        // Delta is 100, meaning they missed the absolute best mate line,
-        // but the position is still totally winning (+1100).
         let (badge, _) = classify(
             1200,
             1100,
             1200,
             &[1200, 1100],
-            0,
+            false,
             false,
             0.0,
             false,
@@ -130,13 +129,12 @@ mod tests {
     #[test]
     fn best_when_position_decided_and_played_engine_line(
     ) {
-        // Delta is 0, they matched the exact top line in a winning position.
         let (badge, _) = classify(
             1200,
             1200,
             1200,
             &[1200, 1100],
-            0,
+            false,
             false,
             0.0,
             false,
@@ -149,13 +147,13 @@ mod tests {
     #[test]
     fn brilliant_when_sacrifice_confirmed_by_engine(
     ) {
-        // -3 material is <= -2
+        // is_sacrifice = true
         let (badge, _) = classify(
             300,
             280,
             290,
             &[290, 20, -50],
-            -3,
+            true,
             false,
             0.0,
             false,
@@ -171,12 +169,28 @@ mod tests {
             45,
             80,
             &[80, 60, 40],
-            0,
+            false,
             false,
             0.0,
             false,
         );
         assert_eq!(badge, MoveBadge::Excellent);
+    }
+
+    #[test]
+    fn not_brilliant_if_position_is_lost() {
+        // Eval is -300, so sacrificing is just desperation
+        let (badge, _) = classify(
+            -280,
+            -300,
+            -300,
+            &[-300, -500],
+            true,
+            false,
+            0.0,
+            false,
+        );
+        assert_ne!(badge, MoveBadge::Brilliant);
     }
 
     // --- Great Move Heuristic ---
@@ -189,7 +203,7 @@ mod tests {
             28,
             30,
             &[30, -150, -200],
-            0,
+            false,
             false,
             0.0,
             false,
@@ -199,7 +213,6 @@ mod tests {
 
     #[test]
     fn not_great_if_obvious_recapture() {
-        // Even with a massive drop, if is_obvious_recapture is true, it shouldn't be Great
         assert!(!is_great_move(
             30,
             30,
@@ -245,15 +258,12 @@ mod tests {
 
     #[test]
     fn test_miss_classification() {
-        // prev_win_loss = 10.0 (opponent blundered 10%)
-        // eval dropping from 100 to 0 is approx a 9% win loss for us.
-        // 9% is within 70% to 140% of the 10% the opponent handed us.
         let (badge, _) = classify(
             100,
             0,
             100,
             &[100, 80],
-            0,
+            false,
             false,
             10.0,
             false,
@@ -265,13 +275,12 @@ mod tests {
 
     #[test]
     fn blunder_by_win_percent_drop() {
-        // 400 (~82.6%) to 0 (50%) -> ~32.6% drop (>= 20%)
         let (badge, _) = classify(
             400,
             0,
             400,
             &[400, 300],
-            0,
+            false,
             false,
             0.0,
             false,
@@ -281,13 +290,12 @@ mod tests {
 
     #[test]
     fn mistake_by_win_percent_drop() {
-        // 200 (~68.1%) to 0 (50%) -> ~18.1% drop (>= 10%)
         let (badge, _) = classify(
             200,
             0,
             200,
             &[200, 100],
-            0,
+            false,
             false,
             0.0,
             false,
@@ -297,13 +305,12 @@ mod tests {
 
     #[test]
     fn inaccuracy_by_win_percent_drop() {
-        // 150 (~63.7%) to 70 (~56.4%) -> ~7.3% drop (>= 5%)
         let (badge, _) = classify(
             150,
             70,
             150,
             &[150, 70],
-            0,
+            false,
             false,
             0.0,
             false,
@@ -313,13 +320,12 @@ mod tests {
 
     #[test]
     fn good_by_win_percent_drop() {
-        // 100 (~59.1%) to 50 (~54.6%) -> ~4.5% drop (>= 2%)
         let (badge, _) = classify(
             100,
             50,
             100,
             &[100, 50],
-            0,
+            false,
             false,
             0.0,
             false,
@@ -329,13 +335,12 @@ mod tests {
 
     #[test]
     fn excellent_by_win_percent_drop() {
-        // 50 (~54.6%) to 40 (~53.7%) -> ~0.9% drop (> 0%)
         let (badge, _) = classify(
             50,
             40,
             50,
             &[50, 40],
-            0,
+            false,
             false,
             0.0,
             false,
@@ -345,13 +350,12 @@ mod tests {
 
     #[test]
     fn best_when_played_equals_best_move() {
-        // Delta == 0 should always be Best, ignoring minor engine depth variations
         let (badge, _) = classify(
             30,
             28,
             28,
             &[28, 10, -20],
-            0,
+            false,
             false,
             0.0,
             false,
@@ -361,13 +365,12 @@ mod tests {
 
     #[test]
     fn forced_move() {
-        // Delta == 0 should always be Best, ignoring minor engine depth variations
         let (badge, _) = classify(
             30,
             28,
             28,
             &[28, 10, -20],
-            0,
+            false,
             false,
             0.0,
             true,
