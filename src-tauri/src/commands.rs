@@ -2,6 +2,7 @@ use crate::engine::classify::classify;
 use crate::engine::uci_engine::{
     Evaluation, UciEngine,
 };
+use crate::math::calculate_accuracy;
 use crate::models::game::{
     AnalysisSummary, AnalyzedMove, GameMetadata,
     MoveBadge, MoveCounts,
@@ -98,6 +99,12 @@ pub fn analyze_game(
     let mut prev_san = String::new();
     let mut prev_win_loss = 0.0;
 
+    // Accuracy trackers
+    let mut white_win_loss = 0.0;
+    let mut black_win_loss = 0.0;
+    let mut white_moves = 0;
+    let mut black_moves = 0;
+
     let mut move_counts = MoveCounts {
         brilliant: 0,
         great: 0,
@@ -184,8 +191,18 @@ pub fn analyze_game(
                 is_obvious_recapture,
                 prev_win_loss,
                 is_forced_move,
-            )
-        };
+            );
+
+        // Track loss for Accuracy CAPS Score
+        let positive_loss =
+            current_win_loss.max(0.0);
+        if ply_count % 2 != 0 {
+            white_win_loss += positive_loss;
+            white_moves += 1;
+        } else {
+            black_win_loss += positive_loss;
+            black_moves += 1;
+        }
 
         match classification {
             MoveBadge::Brilliant => {
@@ -247,8 +264,14 @@ pub fn analyze_game(
     engine.quit();
 
     let summary = AnalysisSummary {
-        white_accuracy: 100.0,
-        black_accuracy: 100.0,
+        white_accuracy: calculate_accuracy(
+            white_win_loss,
+            white_moves,
+        ),
+        black_accuracy: calculate_accuracy(
+            black_win_loss,
+            black_moves,
+        ),
         move_counts,
         metadata,
     };
