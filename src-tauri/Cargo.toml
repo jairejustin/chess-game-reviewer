@@ -26,4 +26,5 @@ shakmaty = "0.30.0"
 pgn-reader = "0.29.0"
 tokio = { version= "1.52.3", features = ["full"] }
 tauri-plugin-shell = "2.3.5"
+polyglot-book-rs = "0.1.0"
 
