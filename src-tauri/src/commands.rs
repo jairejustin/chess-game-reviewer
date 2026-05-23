@@ -1,11 +1,16 @@
-use crate::engine::classify::classify;
+use crate::engine::book::OpeningBook;
+use crate::engine::classify::{
+    classify, ClassifyArgs,
+};
 use crate::engine::see::{
-    capture_square, is_sacrifice,
+    get_target_square, is_sacrifice,
 };
 use crate::engine::uci_engine::{
     Evaluation, UciEngine,
 };
 use crate::math::calculate_accuracy;
+
+#[allow(unused_imports)]
 use crate::models::game::{
     AnalysisSummary, AnalyzedMove, GameMetadata,
     MoveBadge, MoveCounts,
@@ -13,7 +18,7 @@ use crate::models::game::{
 use crate::pgn::PgnVisitor;
 use pgn_reader::Reader;
 use std::io::Cursor;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 use shakmaty::{
     fen::Fen, CastlingMode, Chess, Position,
@@ -190,25 +195,44 @@ pub fn analyze_game(
 
         // 3. Check for Obvious Recapture
         let prev_target =
-            capture_square(&prev_san);
-        let current_target = capture_square(&san);
+            get_target_square(&prev_san);
+        let current_target =
+            get_target_square(&san);
+
+        // If the opponent takes our Queen, taking their Queen back is mathematically the
+        // "Best" move (prevents a -9.0 drop).
+        // However, this requires zero calculation from the player. We explicitly flag
+        // immediate recaptures on the same square so the classifier degrades them
+        // from "Great" down to "Best", preventing players from being rewarded for obvious moves.
         let is_obvious_recapture = prev_target
             .is_some()
             && current_target.is_some()
-            && prev_target == current_target;
+            && prev_target == current_target
+            && san.contains('x');
+
+        // 4. Check Opening Database
+        let is_book_flag = current_pos_opt
+            .as_ref()
+            .map(|pos| {
+                book.is_book_move(pos, &san)
+            })
+            .unwrap_or(false);
+
+        let classify_args = ClassifyArgs {
+            is_book: is_book_flag,
+            prev_eval,
+            played_eval: normalized_cp,
+            best_move_eval: best_eval,
+            multi_pv_evals: &multi_pv_evals,
+            is_sacrifice: is_sacrifice_flag,
+            is_obvious_recapture,
+            prev_win_loss,
+            is_forced_move,
+        };
 
         // Classify the move
         let (classification, current_win_loss) =
-            classify(
-                prev_eval,
-                normalized_cp,
-                best_eval,
-                &multi_pv_evals,
-                is_sacrifice_flag,
-                is_obvious_recapture,
-                prev_win_loss,
-                is_forced_move,
-            );
+            classify(classify_args);
 
         // Track loss for Accuracy CAPS Score
         let positive_loss =
