@@ -1,20 +1,24 @@
+use shakmaty::san::San;
 use shakmaty::{
     Chess, Color, Move, Position, Role, Square,
 };
 
-/// Extracts the 2-character destination square from a capture SAN.
-/// Example: "Bxf6+" -> Some("f6"), "e4" -> None
-pub fn capture_square(san: &str) -> Option<&str> {
-    if let Some(x_idx) = san.find('x') {
-        let square_start = x_idx + 1;
-        let square_end = square_start + 2;
-        if square_end <= san.len() {
-            return Some(
-                &san[square_start..square_end],
-            );
-        }
+/// Safely extracts the geometric destination square of a move from SAN
+/// using `shakmaty`'s AST parser guarantees we always identify the exact board square.
+pub fn get_target_square(
+    san_str: &str,
+) -> Option<Square> {
+    // Parse the SAN string into shakmaty's native enum
+    let parsed_san =
+        San::from_ascii(san_str.as_bytes())
+            .ok()?;
+
+    // Extract the destination square. Castling (O-O / O-O-O) returns None
+    // because you can't "recapture" on a castling square.
+    match parsed_san {
+        San::Normal { to, .. } => Some(to),
+        _ => None,
     }
-    None
 }
 
 pub fn piece_value(role: Role) -> i32 {
@@ -29,6 +33,14 @@ pub fn piece_value(role: Role) -> i32 {
 
 /// Recursively calculates the Static Exchange Evaluation (SEE) on a target square.
 /// Returns the net material gain for the side whose turn it is to move.
+///
+/// LEGAL MOVES: Custom ray-casting SEE implementations often fail to account
+/// for absolute pins (e.g., an attacking Rook is pinned to its King and cannot actually capture).
+/// By utilizing `pos.legal_moves()`, we guarantee 100% accurate evaluations of pins,
+/// discovered attacks, and en passant, at the slight cost of performance.
+///
+/// LVA (Lowest Value Attacker): We always simulate the capture using the weakest
+/// attacking piece. A rational player will capture a pawn with their pawn, not their Queen.
 pub fn legal_see(
     pos: &Chess,
     target: Square,
@@ -58,7 +70,6 @@ pub fn legal_see(
     }
 
     let best_move = best_capture.unwrap();
-
     let captured_role = pos
         .board()
         .piece_at(target)
@@ -76,6 +87,11 @@ pub fn legal_see(
 }
 
 /// Checks if any piece belonging to `color` is hanging (loss of >= 2 material).
+///
+/// SEE >= 2: A value of 1 usually means a pawn trade. A loss of 2 or more indicates
+/// a true piece sacrifice (e.g., giving up a Knight (3) for a Pawn (1) results in a net loss of 2).
+/// We use SEE because it mathematically confirms the piece is actually trapped/hanging on the board,
+/// separate from what the engine evaluation says about the overall position.
 pub fn is_sacrifice(
     current_pos: &Chess,
     color: Color,
