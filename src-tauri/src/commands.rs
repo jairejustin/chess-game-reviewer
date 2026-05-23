@@ -37,8 +37,46 @@ pub fn analyze_game(
             }
         };
 
-    let binary_path = "/home/j/Documents/Personal Projects/chess-analyze/src-tauri/binaries/theoria-x86_64-unknown-linux-gnu";
-    let mut engine = UciEngine::new(binary_path);
+    // Resolve the Chess Engine
+    let target_triple = std::env::consts::ARCH
+        .to_owned()
+        + "-"
+        + std::env::consts::OS;
+    let engine_path = app
+        .path()
+        .resolve(
+            format!(
+                "core/engine/theoria-{}",
+                target_triple
+            ),
+            tauri::path::BaseDirectory::Resource,
+        )
+        .map_err(|_| {
+            "Failed to locate engine binary"
+                .to_string()
+        })?;
+
+    // Resolve the Opening Book
+    let book_path = app
+        .path()
+        .resolve(
+            "core/database/book.bin",
+            tauri::path::BaseDirectory::Resource,
+        )
+        .map_err(|_| {
+            "Failed to locate opening book"
+                .to_string()
+        })?;
+
+    // Load the database into memory once
+    let book = OpeningBook::new(
+        book_path.to_str().unwrap_or(""),
+    );
+
+    let binary_path_str =
+        engine_path.to_str().unwrap();
+    let mut engine =
+        UciEngine::new(binary_path_str);
     let depth = 15;
 
     let initial_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
