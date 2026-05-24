@@ -1,13 +1,14 @@
 use crate::math::calculate_win_percent;
 use crate::models::game::MoveBadge;
 
-/// Struct containing all context needed to classify a chess move.
-/// If we invent new heuristics (like `is_endgame`), we can add them here without breaking older tests.
+/// A dependency injection struct holding all contextual data and normalized centipawn scores
+/// needed to mathematically classify a move.
+// If we invent new heuristics (like `is_endgame`), we can add them here without breaking older tests.
 pub struct ClassifyArgs<'a> {
     pub is_book: bool,
     pub prev_eval: i32,
     pub played_eval: i32,
-    pub best_move_eval: i32,
+    pub prev_best_eval: i32,
     pub multi_pv_evals: &'a [i32],
     pub is_sacrifice: bool,
     pub is_obvious_recapture: bool,
@@ -21,7 +22,7 @@ impl<'a> Default for ClassifyArgs<'a> {
             is_book: false,
             prev_eval: 0,
             played_eval: 0,
-            best_move_eval: 0,
+            prev_best_eval: 0,
             multi_pv_evals: &[],
             is_sacrifice: false,
             is_obvious_recapture: false,
@@ -31,6 +32,8 @@ impl<'a> Default for ClassifyArgs<'a> {
     }
 }
 
+/// Processes evaluation shifts, heuristic flags, and win-probability loss
+/// to assign `MoveBadge` classification.
 pub fn classify(
     args: ClassifyArgs,
 ) -> (MoveBadge, f64) {
@@ -41,8 +44,12 @@ pub fn classify(
         return (MoveBadge::Book, 0.0);
     }
 
+    // The absolute difference in centipawns between best engine move and played move.
     let delta =
-        args.best_move_eval - args.played_eval;
+        args.prev_best_eval - args.played_eval;
+
+    // The drop in win probability caused by the move.
+    // Is used as the primary metric for assigning base classifications.
     let win_loss =
         calculate_win_percent(args.prev_eval)
             - calculate_win_percent(
@@ -100,7 +107,7 @@ pub fn classify(
         && args.prev_eval.abs() <= 1000
         && is_great_move(
             args.played_eval,
-            args.best_move_eval,
+            args.prev_best_eval,
             args.multi_pv_evals,
             args.is_obvious_recapture,
         )
@@ -121,6 +128,8 @@ pub fn classify(
     (classification, win_loss)
 }
 
+/// A heuristic helper function that checks if the played move was
+/// the only viable option to maintain advantage or equality.
 pub fn is_great_move(
     played_eval: i32,
     best_eval: i32,
@@ -154,7 +163,7 @@ mod tests {
         let args = ClassifyArgs {
             prev_eval: 1200,
             played_eval: 1100,
-            best_move_eval: 1200,
+            prev_best_eval: 1200,
             multi_pv_evals: &[1200, 1100],
             ..Default::default()
         };
@@ -170,7 +179,7 @@ mod tests {
         let args = ClassifyArgs {
             prev_eval: 1200,
             played_eval: 1200,
-            best_move_eval: 1200,
+            prev_best_eval: 1200,
             multi_pv_evals: &[1200, 1100],
             ..Default::default()
         };
@@ -186,7 +195,7 @@ mod tests {
         let args = ClassifyArgs {
             prev_eval: 300,
             played_eval: 280,
-            best_move_eval: 290,
+            prev_best_eval: 290,
             multi_pv_evals: &[290, 20, -50],
             is_sacrifice: true,
             ..Default::default()
@@ -203,7 +212,7 @@ mod tests {
         let args = ClassifyArgs {
             prev_eval: 50,
             played_eval: 45,
-            best_move_eval: 80,
+            prev_best_eval: 80,
             multi_pv_evals: &[80, 60, 40],
             ..Default::default()
         };
@@ -218,7 +227,7 @@ mod tests {
         let args = ClassifyArgs {
             prev_eval: -280,
             played_eval: -300,
-            best_move_eval: -300,
+            prev_best_eval: -300,
             multi_pv_evals: &[-300, -500],
             is_sacrifice: true,
             ..Default::default()
@@ -235,7 +244,7 @@ mod tests {
         let args = ClassifyArgs {
             prev_eval: 30,
             played_eval: 28,
-            best_move_eval: 30,
+            prev_best_eval: 30,
             multi_pv_evals: &[30, -150, -200],
             ..Default::default()
         };
@@ -250,7 +259,7 @@ mod tests {
         let args = ClassifyArgs {
             prev_eval: 100,
             played_eval: 0,
-            best_move_eval: 100,
+            prev_best_eval: 100,
             multi_pv_evals: &[100, 80],
             prev_win_loss: 10.0,
             ..Default::default()
@@ -266,7 +275,7 @@ mod tests {
         let args = ClassifyArgs {
             prev_eval: 400,
             played_eval: 0,
-            best_move_eval: 400,
+            prev_best_eval: 400,
             multi_pv_evals: &[400, 300],
             ..Default::default()
         };
@@ -281,7 +290,7 @@ mod tests {
         let args = ClassifyArgs {
             prev_eval: 200,
             played_eval: 0,
-            best_move_eval: 200,
+            prev_best_eval: 200,
             multi_pv_evals: &[200, 100],
             ..Default::default()
         };
@@ -296,7 +305,7 @@ mod tests {
         let args = ClassifyArgs {
             prev_eval: 150,
             played_eval: 70,
-            best_move_eval: 150,
+            prev_best_eval: 150,
             multi_pv_evals: &[150, 70],
             ..Default::default()
         };
@@ -311,7 +320,7 @@ mod tests {
         let args = ClassifyArgs {
             prev_eval: 100,
             played_eval: 50,
-            best_move_eval: 100,
+            prev_best_eval: 100,
             multi_pv_evals: &[100, 50],
             ..Default::default()
         };
@@ -326,7 +335,7 @@ mod tests {
         let args = ClassifyArgs {
             prev_eval: 50,
             played_eval: 40,
-            best_move_eval: 50,
+            prev_best_eval: 50,
             multi_pv_evals: &[50, 40],
             ..Default::default()
         };
@@ -341,7 +350,7 @@ mod tests {
         let args = ClassifyArgs {
             prev_eval: 30,
             played_eval: 28,
-            best_move_eval: 28,
+            prev_best_eval: 28,
             multi_pv_evals: &[28, 10, -20],
             ..Default::default()
         };
@@ -356,7 +365,7 @@ mod tests {
         let args = ClassifyArgs {
             prev_eval: 30,
             played_eval: 28,
-            best_move_eval: 28,
+            prev_best_eval: 28,
             multi_pv_evals: &[28, 10, -20],
             is_forced_move: true,
             ..Default::default()
@@ -379,6 +388,46 @@ mod tests {
         assert_eq!(
             classify(args).0,
             MoveBadge::Book
+        );
+    }
+
+    #[test]
+    fn black_blunder_detected_with_corrected_pov()
+    {
+        // Scenario: The position was equal (0.0). Black plays a move, and the engine
+        // eval jumps to +400 (White is winning).
+        // Our commands loop multiplies this by -1 for Black's turn,
+        // so the classifier sees prev=0 and played=-400 (Black's advantage dropped massively).
+        let args = ClassifyArgs {
+            prev_eval: 0,
+            played_eval: -400,
+            prev_best_eval: 0,
+            multi_pv_evals: &[0, -400],
+            ..Default::default()
+        };
+
+        assert_eq!(
+            classify(args).0,
+            MoveBadge::Blunder
+        );
+    }
+
+    #[test]
+    fn great_move_with_corrected_multi_pv_pov() {
+        // Scenario: The best move keeps a +30 advantage. The second best move gives
+        // the opponent a +150 advantage.
+        // They are negated into the moving player's POV (-150).
+        let args = ClassifyArgs {
+            prev_eval: 30,
+            played_eval: 28,
+            prev_best_eval: 30,
+            multi_pv_evals: &[30, -150],
+            ..Default::default()
+        };
+
+        assert_eq!(
+            classify(args).0,
+            MoveBadge::Great
         );
     }
 }
