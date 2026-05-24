@@ -1,5 +1,5 @@
 use crate::models::game::GameMetadata;
-use pgn_reader::{RawTag, SanPlus, Visitor};
+use pgn_reader::{SanPlus, Visitor};
 use shakmaty::fen::Fen;
 use shakmaty::{Chess, EnPassantMode, Position};
 use std::ops::ControlFlow;
