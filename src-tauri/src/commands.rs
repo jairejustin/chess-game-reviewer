@@ -55,14 +55,13 @@ fn run_analysis_pipeline(
     pgn: String,
     depth: u8,
 ) -> Result<(), String> {
-
     // Visitor impl used to construct the game metadata and track positions
     let mut visitor = PgnVisitor::new();
 
     // Streams the raw PGN string bytes
     let mut reader =
         Reader::new(Cursor::new(pgn.as_bytes()));
-    
+
     // Parses game headers
     // Maps the sequence of SAN moves to their FEN positions
     let (metadata, positions) =
@@ -73,7 +72,7 @@ fn run_analysis_pipeline(
                     .to_string())
             }
         };
-    
+
     let target_triple = std::env::consts::ARCH
         .to_owned()
         + "-"
@@ -105,7 +104,7 @@ fn run_analysis_pipeline(
             "Failed to locate opening book"
                 .to_string()
         })?;
-    
+
     // Loads the opening database
     let book = OpeningBook::new(
         book_path.to_str().unwrap_or(""),
@@ -120,11 +119,16 @@ fn run_analysis_pipeline(
     let initial_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
     // Loads Starting position
-    let initial = engine
+    let (
+        initial_eval,
+        initial_best_move,
+        _,
+        initial_multi_pv_evals,
+    ) = engine
         .analyze_position(initial_fen, depth);
 
     // The evaluation score from the position immediately preceding the move the player is about to make.
-    let mut prev_eval = match initial.0 {
+    let mut prev_eval = match initial_eval {
         Evaluation::Cp(cp) => cp,
         Evaluation::Mate(m) => {
             if m > 0 {
@@ -143,11 +147,17 @@ fn run_analysis_pipeline(
     // total half-moves
     let mut ply_count = 1;
 
-    // The drop in win probability caused by the previous move 
+    // The drop in win probability caused by the previous move
     let mut prev_win_loss = 0.0;
 
     // The best engine move that the player should've played
-    let mut prev_best_move_uci = initial.1;
+    let mut prev_best_move_uci =
+        initial_best_move;
+
+    // These are the top-3 engine choices the CURRENT player had available
+    // before choosing their move.
+    let mut prev_multi_pv_evals =
+        initial_multi_pv_evals;
 
     // Tracks if player is still in book
     // Disables database lookups once player played an non-book move
@@ -177,10 +187,9 @@ fn run_analysis_pipeline(
         book: 0,
         forced: 0,
     };
-    
+
     // Iterates over the moves and analyzes them
     for (san, fen) in positions {
-
         // Get engine evaluation
         let (
             played_eval,
@@ -188,7 +197,7 @@ fn run_analysis_pipeline(
             pv,
             multi_pv_evals,
         ) = engine.analyze_position(&fen, depth);
-        
+
         // Get evaluation for the played move
         let played_cp = match played_eval {
             Evaluation::Cp(cp) => cp,
@@ -200,7 +209,7 @@ fn run_analysis_pipeline(
                 }
             }
         };
-        
+
         // Normalized means it is from whites perspective,
         // white goes towards positive and black goes towards negative.
         let normalized_cp = if ply_count % 2 != 0
@@ -210,7 +219,7 @@ fn run_analysis_pipeline(
             played_cp
         };
 
-        // Delegate to isolated logic helper
+        // Delegate to isolated logic helper.
         let (
             classification,
             current_win_loss,
@@ -224,13 +233,13 @@ fn run_analysis_pipeline(
             prev_eval,
             normalized_cp,
             prev_win_loss,
-            &multi_pv_evals,
+            &prev_multi_pv_evals,
             ply_count,
             &mut still_in_book,
             &book,
         );
-        
-        // 
+
+        //
         let positive_loss =
             current_win_loss.max(0.0);
 
@@ -242,7 +251,7 @@ fn run_analysis_pipeline(
             black_win_loss += positive_loss;
             black_moves += 1;
         }
-        
+
         // Increments the move badge tally
         match classification {
             MoveBadge::Brilliant => {
@@ -291,22 +300,23 @@ fn run_analysis_pipeline(
             classification,
             principal_variation: pv,
         };
-        
+
         // Emit analyzed move
         app.emit("batch-tick", &analyzed_move)
             .map_err(|e| e.to_string())?;
-        
+
         // Update iteration state
         prev_eval = normalized_cp;
         prev_fen = fen;
         prev_san = san.clone();
         prev_win_loss = current_win_loss;
         prev_best_move_uci = opponent_best_move;
+        prev_multi_pv_evals = multi_pv_evals;
         ply_count += 1;
     }
 
     engine.quit();
-    
+
     // Construct Analysis
     let summary = AnalysisSummary {
         white_accuracy: calculate_accuracy(
@@ -320,7 +330,7 @@ fn run_analysis_pipeline(
         move_counts,
         metadata,
     };
-    
+
     // Emit analysis completion
     app.emit("analysis-complete", &summary)
         .map_err(|e| e.to_string())?;
@@ -342,11 +352,10 @@ fn evaluate_move_context(
     still_in_book: &mut bool,
     book: &OpeningBook,
 ) -> (MoveBadge, f64, String) {
-
     // A multiplier to convert White-normalized scores into the moving player's perspective.
     let pov_multiplier =
         if ply_count % 2 != 0 { 1 } else { -1 };
-    
+
     // Centipawn engine values to be passed to classify function
     let class_prev_eval =
         prev_eval * pov_multiplier;
@@ -354,11 +363,7 @@ fn evaluate_move_context(
         normalized_cp * pov_multiplier;
     let class_best_eval =
         prev_eval * pov_multiplier;
-    let class_multi_pv: Vec<i32> = multi_pv_evals
-        .iter()
-        .map(|&cp| -cp)
-        .collect();
-    
+
     // Parsed board state before the move.
     // Is used to get forced moves and legal moves.
     let prev_pos =
@@ -370,7 +375,7 @@ fn evaluate_move_context(
                 )
                 .ok()
             });
-    
+
     // Parsed board state after the move.
     // Is used to check for sacrifices.
     let current_pos_opt =
@@ -382,13 +387,13 @@ fn evaluate_move_context(
                 )
                 .ok()
             });
-    
+
     // Checks if its the only legal move
     let is_forced_move = prev_pos
         .as_ref()
         .map(|pos| pos.legal_moves().len() == 1)
         .unwrap_or(false);
-    
+
     // Checks if the move is a sacrifice
     let is_sacrifice_flag =
         if let Some(ref pos) = current_pos_opt {
@@ -406,7 +411,7 @@ fn evaluate_move_context(
     let current_target = get_target_square(san);
 
     // During a queen to queen capture, taking their Queen back is mathematically the
-    // "Best" move (prevents a -9.0 drop) and in most cases it is technicaly a "Great" 
+    // "Best" move (prevents a -9.0 drop) and in most cases it is technicaly a "Great"
     // move because not recapturing usually just loses.
     // However, this requires zero calculation from the player. We explicitly flag
     // immediate recaptures on the same square so the classifier degrades them
@@ -417,7 +422,7 @@ fn evaluate_move_context(
         && current_target.is_some()
         && prev_target == current_target
         && san.contains('x');
-    
+
     // Checks opening database if the position is still in book
     let is_book_flag = if *still_in_book {
         let result = current_pos_opt
@@ -452,14 +457,14 @@ fn evaluate_move_context(
     } else {
         prev_best_move_uci.to_string()
     };
-    
+
     // Construct classification arguments
     let classify_args = ClassifyArgs {
         is_book: is_book_flag,
         prev_eval: class_prev_eval,
         played_eval: class_played_eval,
         prev_best_eval: class_best_eval,
-        multi_pv_evals: &class_multi_pv,
+        multi_pv_evals,
         is_sacrifice: is_sacrifice_flag,
         is_obvious_recapture,
         prev_win_loss,
