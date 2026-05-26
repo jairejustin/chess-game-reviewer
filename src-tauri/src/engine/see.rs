@@ -3,24 +3,26 @@ use shakmaty::{
     Chess, Color, Move, Position, Role, Square,
 };
 
-/// Safely extracts the geometric destination square of a move from SAN
-/// using `shakmaty`'s AST parser guarantees we always identify the exact board square.
+/// Extracts the exact geometric destination square from SAN string.
+/// It then maps the SAN string into `shakmaty::Square` enum.
+/// Returns `None` on castling.
 pub fn get_target_square(
     san_str: &str,
 ) -> Option<Square> {
-    // Parse the SAN string into shakmaty's native enum
+    // Parses the SAN string
     let parsed_san =
         San::from_ascii(san_str.as_bytes())
             .ok()?;
 
-    // Extract the destination square. Castling (O-O / O-O-O) returns None
-    // because you can't "recapture" on a castling square.
+    // Extract the destination square.
+    // Castling (O-O / O-O-O) returns None because you can't "recapture" on a castling square.
     match parsed_san {
         San::Normal { to, .. } => Some(to),
         _ => None,
     }
 }
 
+/// Maps standard chess pieces to their traditional mathematical point values
 pub fn piece_value(role: Role) -> i32 {
     match role {
         Role::Pawn => 1,
@@ -31,16 +33,13 @@ pub fn piece_value(role: Role) -> i32 {
     }
 }
 
-/// Recursively calculates the Static Exchange Evaluation (SEE) on a target square.
-/// Returns the net material gain for the side whose turn it is to move.
+/// Recursively simulates a sequence of captures on a single square from
+/// the lowest value attackers to calculate the final net material gain (for the opponent).
 ///
-/// LEGAL MOVES: Custom ray-casting SEE implementations often fail to account
-/// for absolute pins (e.g., an attacking Rook is pinned to its King and cannot actually capture).
-/// By utilizing `pos.legal_moves()`, we guarantee 100% accurate evaluations of pins,
-/// discovered attacks, and en passant, at the slight cost of performance.
+/// Guarantees accurate evaluations of pins,
+/// discovered attacks, and en passant, at the slight cost of performance though.
 ///
-/// LVA (Lowest Value Attacker): We always simulate the capture using the weakest
-/// attacking piece. A rational player will capture a pawn with their pawn, not their Queen.
+/// Reference: [Chess Programming Wiki: Static Exchange Evaluation](https://www.chessprogramming.org/Static_Exchange_Evaluation)
 pub fn legal_see(
     pos: &Chess,
     target: Square,
@@ -53,11 +52,12 @@ pub fn legal_see(
         })
         .collect();
 
+    // Base case - no attackers left
     if captures.is_empty() {
-        return 0; // No attackers left, sequence ends
+        return 0;
     }
 
-    // Find the capture with the lowest value attacker (LVA)
+    // Find the capture with the lowest value attacker
     let mut best_capture = None;
     let mut lowest_attacker_val = i32::MAX;
 
@@ -86,18 +86,23 @@ pub fn legal_see(
     current_gain - opponent_gain.max(0)
 }
 
-/// Checks if any piece belonging to `color` is hanging (loss of >= 2 material).
-///
-/// SEE >= 2: A value of 1 usually means a pawn trade. A loss of 2 or more indicates
-/// a true piece sacrifice (e.g., giving up a Knight (3) for a Pawn (1) results in a net loss of 2).
-/// We use SEE because it mathematically confirms the piece is actually trapped/hanging on the board,
-/// separate from what the engine evaluation says about the overall position.
-pub fn is_sacrifice(
+/// Iterates through player's every pieces using Static Exchange Evaluation to determine
+/// if any piece is genuinely hanging for a material loss of 2 or more points.
+/// This is a pure mathematical heuristic evaluating the squares. It confirms
+/// if any piece is vulnerable to a losing capture sequence
+//
+//
+// SEE >= 2: A value of 1 usually means an even pawn trade. A loss of 2 or more indicates
+// a true piece loss (e.g., losing a Knight (3) to a Pawn (1) results in a net loss of 2).
+pub fn is_losing_material(
     current_pos: &Chess,
     color: Color,
 ) -> bool {
+    // Extracts the layout of the current chessboard position
     let board = current_pos.board();
 
+    // Iterates though the board layout to identify squares occupied by color's pieces.
+    // It then uses SEE to simulate every capture possible to that piece
     for sq in board.by_color(color) {
         if legal_see(current_pos, sq) >= 2 {
             return true;
