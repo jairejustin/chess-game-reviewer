@@ -1,3 +1,10 @@
+/// Converts a raw centipawn evaluation into an expected win percentage (0 to 100)
+/// using a scaled logistic sigmoid curve.
+///
+/// This naturally prevents massive centipawn shifts in completely winning or losing
+/// positions from skewing move classifications.
+///
+/// Reference: [Lichess Win Probability Model](https://lichess.org/page/accuracy)
 pub fn calculate_win_percent(cp: i32) -> f64 {
     50.0 + 50.0
         * (2.0
@@ -6,6 +13,13 @@ pub fn calculate_win_percent(cp: i32) -> f64 {
             - 1.0)
 }
 
+/// Averages the player's total win-probability loss over the entire game and applies
+/// an exponential decay  formula to generate a standardized 0-100 accuracy score.
+///
+/// This mimics modern CAPS systems to provide an intuitive "report card" grade, where
+/// perfection is mathematically impossible.
+///
+/// Reference: [Chess.com CAPS Architecture](https://support.chess.com/en/articles/8708970-how-is-accuracy-in-analysis-determined)
 pub fn calculate_accuracy(
     total_win_loss: f64,
     num_moves: u32,
