@@ -3,7 +3,7 @@ use crate::engine::classify::{
     classify, ClassifyArgs,
 };
 use crate::engine::see::{
-    get_target_square, is_sacrifice,
+    get_target_square, is_losing_material,
 };
 use crate::engine::uci_engine::{
     Evaluation, UciEngine,
@@ -395,14 +395,14 @@ fn evaluate_move_context(
         .unwrap_or(false);
 
     // Checks if the move is a sacrifice
-    let is_sacrifice_flag =
+    let is_losing_material_flag =
         if let Some(ref pos) = current_pos_opt {
             let color = if ply_count % 2 != 0 {
                 shakmaty::Color::White
             } else {
                 shakmaty::Color::Black
             };
-            is_sacrifice(pos, color)
+            is_losing_material(pos, color)
         } else {
             false
         };
@@ -465,7 +465,8 @@ fn evaluate_move_context(
         played_eval: class_played_eval,
         prev_best_eval: class_best_eval,
         multi_pv_evals,
-        is_sacrifice: is_sacrifice_flag,
+        is_losing_material:
+            is_losing_material_flag,
         is_obvious_recapture,
         prev_win_loss,
         is_forced_move,

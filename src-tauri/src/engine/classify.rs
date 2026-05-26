@@ -10,7 +10,7 @@ pub struct ClassifyArgs<'a> {
     pub played_eval: i32,
     pub prev_best_eval: i32,
     pub multi_pv_evals: &'a [i32],
-    pub is_sacrifice: bool,
+    pub is_losing_material: bool,
     pub is_obvious_recapture: bool,
     pub prev_win_loss: f64,
     pub is_forced_move: bool,
@@ -24,7 +24,7 @@ impl<'a> Default for ClassifyArgs<'a> {
             played_eval: 0,
             prev_best_eval: 0,
             multi_pv_evals: &[],
-            is_sacrifice: false,
+            is_losing_material: false,
             is_obvious_recapture: false,
             prev_win_loss: 0.0,
             is_forced_move: false,
@@ -90,8 +90,9 @@ pub fn classify(
     // Upgrades & Overrides
 
     // THE MISS: If the opponent's previous move resulted in a large drop for them (>= 5%),
-    // but our current move gives 70% to 140% of that advantage right back, we didn't just play
-    // poorly. We "Missed" the punishment for their mistake.
+    // but our current move gives 70% to 140% of that advantage right back.
+    // It's a bad/inaccurate move that fails to punish a bad move from opponent.
+    // Or just misses a faster way to win the game
     if args.prev_win_loss >= 5.0
         && win_loss >= (args.prev_win_loss * 0.7)
         && win_loss <= (args.prev_win_loss * 1.4)
@@ -101,7 +102,7 @@ pub fn classify(
 
     // GREAT MOVE: If the played move matches the best move, AND the second-best move
     // creates an 8.5% win probability drop, this was an "Only Move". The player navigated
-    // a tightrope where any other choice would have lost the advantage.
+    // a tightrope where any other choice would have lost the advantage or straight up loses.
     if (classification == MoveBadge::Best
         || classification == MoveBadge::Excellent)
         && args.prev_eval.abs() <= 1000
@@ -119,7 +120,7 @@ pub fn classify(
     // If SEE says it's hanging, but the engine eval didn't drop, it's a sound sacrifice.
     if win_loss < 5.0
         && delta <= 40
-        && args.is_sacrifice
+        && args.is_losing_material
         && args.played_eval > -200
     {
         classification = MoveBadge::Brilliant;
@@ -197,7 +198,7 @@ mod tests {
             played_eval: 280,
             prev_best_eval: 290,
             multi_pv_evals: &[290, 20, -50],
-            is_sacrifice: true,
+            is_losing_material: true,
             ..Default::default()
         };
         assert_eq!(
@@ -229,7 +230,7 @@ mod tests {
             played_eval: -300,
             prev_best_eval: -300,
             multi_pv_evals: &[-300, -500],
-            is_sacrifice: true,
+            is_losing_material: true,
             ..Default::default()
         };
         assert_ne!(
