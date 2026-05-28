@@ -104,11 +104,13 @@ impl Visitor for PgnVisitor {
                 .clone()
                 .play(m)
                 .unwrap();
+
             let fen = Fen::from_position(
                 &self.board.clone(),
                 EnPassantMode::Legal,
             )
             .to_string();
+
             self.positions
                 .push((san_string, fen));
         }
