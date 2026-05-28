@@ -20,6 +20,7 @@ pub enum MoveBadge {
 /// A payload for a single half-move (a ply), containing its
 /// evaluation, classification, and SAN (Standard Algebraic Notation).
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AnalyzedMove {
     pub ply: u32,
     pub san: String,
@@ -34,6 +35,7 @@ pub struct AnalyzedMove {
 /// An aggregated tally tracking the total number of each
 /// classification badge awarded during the game.
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MoveCounts {
     pub brilliant: u32,
     pub great: u32,
@@ -51,6 +53,7 @@ pub struct MoveCounts {
 /// The parsed PGN header information including the players,
 /// date, event, and final match result.
 #[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct GameMetadata {
     pub white: String,
     pub black: String,
@@ -63,6 +66,7 @@ pub struct GameMetadata {
 /// match metadata, and calculated CAPS accuracy scores for both players
 /// (Computer Aggregated Precision Score).
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AnalysisSummary {
     pub white_accuracy: f64,
     pub black_accuracy: f64,
