@@ -14,6 +14,7 @@ pub struct ClassifyArgs<'a> {
     pub is_obvious_recapture: bool,
     pub prev_win_loss: f64,
     pub is_forced_move: bool,
+    pub is_best_engine_move: bool,
 }
 
 impl<'a> Default for ClassifyArgs<'a> {
@@ -28,6 +29,7 @@ impl<'a> Default for ClassifyArgs<'a> {
             is_obvious_recapture: false,
             prev_win_loss: 0.0,
             is_forced_move: false,
+            is_best_engine_move: false,
         }
     }
 }
@@ -67,12 +69,15 @@ pub fn classify(
         > 1000
         && args.played_eval.abs() > 1000
     {
-        if delta == 0 {
+        if delta <= 0 || args.is_best_engine_move
+        {
             MoveBadge::Best
         } else {
             MoveBadge::Excellent
         }
-    } else if delta == 0 {
+    } else if delta <= 0
+        || args.is_best_engine_move
+    {
         MoveBadge::Best
     } else {
         match win_loss {
@@ -82,7 +87,7 @@ pub fn classify(
                 MoveBadge::Inaccuracy
             }
             w if w >= 2.0 => MoveBadge::Good,
-            w if w > 0.0 => MoveBadge::Excellent,
+            w if w >= 0.5 => MoveBadge::Excellent,
             _ => MoveBadge::Best,
         }
     };

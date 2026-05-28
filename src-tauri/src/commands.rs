@@ -450,6 +450,9 @@ fn evaluate_move_context(
         prev_best_move_uci.to_string()
     };
 
+    let is_best_engine_move =
+        san == best_move_san;
+
     // Construct classification arguments
     let classify_args = ClassifyArgs {
         is_book: is_book_flag,
@@ -462,6 +465,7 @@ fn evaluate_move_context(
         is_obvious_recapture,
         prev_win_loss,
         is_forced_move,
+        is_best_engine_move,
     };
 
     // Classify move
