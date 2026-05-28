@@ -348,11 +348,16 @@ fn evaluate_move_context(
         prev_eval * pov_multiplier;
     let class_played_eval =
         normalized_cp * pov_multiplier;
-    let class_best_eval =
-        prev_eval * pov_multiplier;
+
+    // multi_pv_evals[0] is the engine's top-line score
+    // for the position before the move.
+    let class_best_eval = multi_pv_evals
+        .first()
+        .copied()
+        .unwrap_or(class_prev_eval);
 
     // Parsed board state before the move.
-    // Is used to get forced moves and legal moves.
+    // Is used to get forced moves, legal moves, and book lookups.
     let prev_pos =
         Fen::from_ascii(prev_fen.as_bytes())
             .ok()
