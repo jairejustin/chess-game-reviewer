@@ -20,7 +20,7 @@ use pgn_reader::Reader;
 use shakmaty::san::San;
 use shakmaty::uci::UciMove;
 use std::io::Cursor;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 
 use shakmaty::{
     fen::Fen, CastlingMode, Chess, Position,
@@ -73,37 +73,21 @@ fn run_analysis_pipeline(
             }
         };
 
-    let target_triple = std::env::consts::ARCH
-        .to_owned()
-        + "-"
-        + std::env::consts::OS;
+    // temp fix
+    // Bypass Tauri's resource and externalBin resolver for now.
+    let target_triple =
+        "x86_64-unknown-linux-gnu";
 
-    // Resolves the absolute path of the UCI chess engine binary
-    let engine_path = app
-        .path()
-        .resolve(
-            format!(
-                "core/engine/theoria-{}",
-                target_triple
-            ),
-            tauri::path::BaseDirectory::Resource,
-        )
-        .map_err(|_| {
-            "Failed to locate engine binary"
-                .to_string()
-        })?;
+    let engine_path = std::env::current_dir()
+        .unwrap()
+        .join(format!(
+            "core/engine/theoria-{}",
+            target_triple
+        ));
 
-    // Resolves the absolute path of the Openning Database
-    let book_path = app
-        .path()
-        .resolve(
-            "core/database/book.bin",
-            tauri::path::BaseDirectory::Resource,
-        )
-        .map_err(|_| {
-            "Failed to locate opening book"
-                .to_string()
-        })?;
+    let book_path = std::env::current_dir()
+        .unwrap()
+        .join("core/database/book.bin");
 
     // Loads the opening database
     let book = OpeningBook::new(
