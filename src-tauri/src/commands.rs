@@ -55,6 +55,9 @@ fn run_analysis_pipeline(
     pgn: String,
     depth: u8,
 ) -> Result<(), String> {
+    app.emit("analysis-started", ())
+        .map_err(|e| e.to_string())?;
+
     // Visitor impl used to construct the game metadata and track positions
     let mut visitor = PgnVisitor::new();
 
