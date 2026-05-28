@@ -146,10 +146,6 @@ fn run_analysis_pipeline(
     let mut prev_multi_pv_evals =
         initial_multi_pv_evals;
 
-    // Tracks if player is still in book
-    // Disables database lookups once player played an non-book move
-    let mut still_in_book = true;
-
     // The cumulative mathematical disadvantage accumulated by each player.
     // Is used to calculate their final accuracy CAPS scores.
     let mut white_win_loss = 0.0;
@@ -197,7 +193,7 @@ fn run_analysis_pipeline(
             }
         };
 
-        // Normalized means it is from whites perspective,
+        // Normalized means it is from white's perspective,
         // white goes towards positive and black goes towards negative.
         let normalized_cp = if ply_count % 2 != 0
         {
@@ -222,7 +218,6 @@ fn run_analysis_pipeline(
             prev_win_loss,
             &prev_multi_pv_evals,
             ply_count,
-            &mut still_in_book,
             &book,
         );
 
@@ -336,7 +331,6 @@ fn evaluate_move_context(
     prev_win_loss: f64,
     multi_pv_evals: &[i32],
     ply_count: u32,
-    still_in_book: &mut bool,
     book: &OpeningBook,
 ) -> (MoveBadge, f64, String) {
     // A multiplier to convert White-normalized scores into the moving player's perspective.
@@ -415,21 +409,14 @@ fn evaluate_move_context(
         && prev_target == current_target
         && san.contains('x');
 
-    // Checks opening database if the position is still in book
-    let is_book_flag = if *still_in_book {
-        let result = current_pos_opt
-            .as_ref()
-            .map(|pos| {
-                book.is_book_move(pos, fen, san)
-            })
-            .unwrap_or(false);
-        if !result {
-            *still_in_book = false;
-        }
-        result
-    } else {
-        false
-    };
+    // Pass the position from before the move so the book checks if
+    // the played san is a theory move from given previous pos.
+    let is_book_flag = prev_pos
+        .as_ref()
+        .map(|pos| {
+            book.is_book_move(pos, prev_fen, san)
+        })
+        .unwrap_or(false);
 
     // Engine best move converted to SAN
     let best_move_san = if let Some(pos) =
