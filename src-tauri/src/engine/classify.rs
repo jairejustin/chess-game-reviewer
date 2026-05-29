@@ -87,7 +87,7 @@ pub fn classify(
                 MoveBadge::Inaccuracy
             }
             w if w >= 2.0 => MoveBadge::Good,
-            w if w >= 0.5 => MoveBadge::Excellent,
+            w if w >= 0.1 => MoveBadge::Excellent,
             _ => MoveBadge::Best,
         }
     };
@@ -126,7 +126,7 @@ pub fn classify(
     if win_loss < 5.0
         && delta <= 40
         && args.is_losing_material
-        && args.played_eval > -200
+        && args.played_eval > 0
     {
         classification = MoveBadge::Brilliant;
     }
