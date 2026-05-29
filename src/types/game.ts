@@ -47,6 +47,7 @@ export interface GameMetadata {
 export interface AnalysisSummary {
   whiteAccuracy: number;
   blackAccuracy: number;
-  moveCounts: MoveCounts;
+  moveCountsWhite: MoveCounts;
+  moveCountsBlack: MoveCounts;
   metadata: GameMetadata;
 }
