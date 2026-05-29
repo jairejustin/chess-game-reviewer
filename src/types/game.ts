@@ -7,6 +7,7 @@ export interface AnalyzedMove {
   bestMoveSan: string;
   classification: MoveBadge;
   principalVariation: string[];
+  mateIn: number | null;
 }
 
 export type MoveBadge =

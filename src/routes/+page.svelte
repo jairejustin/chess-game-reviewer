@@ -9,7 +9,8 @@
     currentEval,
     isAnalyzing,
     analysisSummary,
-    initTauriListeners
+    initTauriListeners,
+    currentMateIn
   } from "../store/gameStore";
   import type { MoveBadge, MoveCounts } from '../types/game';
 
@@ -116,13 +117,17 @@
   $: whitePercent = winPercent($currentEval);
   $: blackPercent = 100 - whitePercent;
 
-  function formatEval(cp: number): string {
+  function formatEval(cp: number, mateIn?: number | null): string {
+    if (mateIn != null) {
+      if (mateIn === 0 && cp >= 10000) return '+M';
+      if (mateIn === 0 && cp <= -10000) return '+M';
+      return mateIn > 0 ? `+M${mateIn}` : `-M${Math.abs(mateIn)}`;
+    }
     if (cp >= 10000)  return '+M';
     if (cp <= -10000) return '-M';
     const abs = Math.abs(cp / 100).toFixed(2);
     return cp >= 0 ? `+${abs}` : `-${abs}`;
   }
-
   function formatAccuracy(score: number): string {
     return score.toFixed(1) + '%';
   }
@@ -160,7 +165,7 @@
     <div class="board-row">
 
       <!-- Eval bar -->
-      <div class="eval-bar" aria-label="Evaluation bar, {formatEval($currentEval)}">
+      <div class="eval-bar" aria-label="Evaluation bar, {formatEval($currentEval, $currentMateIn)}">
         <div class="eval-bar__track">
           <div class="eval-bar__segment eval-bar__segment--black" style="flex: {blackPercent}"></div>
           <div class="eval-bar__divider"></div>
@@ -171,7 +176,7 @@
           class:eval-bar__label--winning={$currentEval > 0}
           class:eval-bar__label--losing={$currentEval < 0}
         >
-          {formatEval($currentEval)}
+          {formatEval($currentEval, $currentMateIn)}
         </span>
       </div>
 

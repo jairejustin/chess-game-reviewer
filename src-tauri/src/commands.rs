@@ -196,13 +196,13 @@ fn run_analysis_pipeline(
         ) = engine.analyze_position(&fen, depth);
 
         // Get evaluation for the played move
-        let played_cp = match played_eval {
-            Evaluation::Cp(cp) => cp,
+        let (played_cp, mate_in) = match played_eval {
+            Evaluation::Cp(cp) => (cp, None),
             Evaluation::Mate(m) => {
                 if m > 0 {
-                    10000
+                    (10000, Some(m))
                 } else {
-                    -10000
+                    (-10000, Some(m))
                 }
             }
         };
@@ -215,6 +215,10 @@ fn run_analysis_pipeline(
         } else {
             played_cp
         };
+
+        let normalized_mate = mate_in.map(|m| {
+            if ply_count % 2 != 0 { -m } else { m }
+        });
 
         // Delegate to isolated logic helper.
         let (
@@ -328,6 +332,7 @@ fn run_analysis_pipeline(
             best_move_san,
             classification,
             principal_variation: pv,
+            mate_in: normalized_mate,
         };
 
         // Emit analyzed move

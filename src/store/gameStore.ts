@@ -19,6 +19,10 @@ export const currentEval = derived(
     ([$moves, $activePly]) => $moves[$activePly]?.playedEval ?? 0
 );
 
+export const currentMateIn = derived(
+    [moves, activePly],
+    ([$moves, $activePly]) => $moves[$activePly]?.mateIn ?? null
+);
 
 export const appendMove = (move: AnalyzedMove) => {
     moves.update(m => {
