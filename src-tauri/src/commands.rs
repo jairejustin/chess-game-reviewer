@@ -157,7 +157,21 @@ fn run_analysis_pipeline(
     let mut black_moves = 0;
 
     // Aggregated tally of moves made by each side for each classification
-    let mut move_counts = MoveCounts {
+    let mut move_counts_white = MoveCounts {
+        brilliant: 0,
+        great: 0,
+        best: 0,
+        excellent: 0,
+        good: 0,
+        inaccuracy: 0,
+        mistake: 0,
+        blunder: 0,
+        miss: 0,
+        book: 0,
+        forced: 0,
+    };
+
+    let mut move_counts_black = MoveCounts {
         brilliant: 0,
         great: 0,
         best: 0,
@@ -225,51 +239,84 @@ fn run_analysis_pipeline(
         let positive_loss =
             current_win_loss.max(0.0);
 
-        // Increments move counter
+        // Increments move counter and move tally
         if ply_count % 2 != 0 {
             white_win_loss += positive_loss;
             white_moves += 1;
+            match classification {
+            MoveBadge::Brilliant => {
+                move_counts_white.brilliant += 1
+            }
+            MoveBadge::Great => {
+                move_counts_white.great += 1
+            }
+            MoveBadge::Best => {
+                move_counts_white.best += 1
+            }
+            MoveBadge::Excellent => {
+                move_counts_white.excellent += 1
+            }
+            MoveBadge::Good => {
+                move_counts_white.good += 1
+            }
+            MoveBadge::Inaccuracy => {
+                move_counts_white.inaccuracy += 1
+            }
+            MoveBadge::Mistake => {
+                move_counts_white.mistake += 1
+            }
+            MoveBadge::Blunder => {
+                move_counts_white.blunder += 1
+            }
+            MoveBadge::Miss => {
+                move_counts_white.miss += 1
+            }
+            MoveBadge::Book => {
+                move_counts_white.book += 1
+            }
+            MoveBadge::Forced => {
+                move_counts_white.forced += 1
+            }
+        }
         } else {
             black_win_loss += positive_loss;
             black_moves += 1;
-        }
-
-        // Increments the move badge tally
-        match classification {
+            match classification {
             MoveBadge::Brilliant => {
-                move_counts.brilliant += 1
+                move_counts_black.brilliant += 1
             }
             MoveBadge::Great => {
-                move_counts.great += 1
+                move_counts_black.great += 1
             }
             MoveBadge::Best => {
-                move_counts.best += 1
+                move_counts_black.best += 1
             }
             MoveBadge::Excellent => {
-                move_counts.excellent += 1
+                move_counts_black.excellent += 1
             }
             MoveBadge::Good => {
-                move_counts.good += 1
+                move_counts_black.good += 1
             }
             MoveBadge::Inaccuracy => {
-                move_counts.inaccuracy += 1
+                move_counts_black.inaccuracy += 1
             }
             MoveBadge::Mistake => {
-                move_counts.mistake += 1
+                move_counts_black.mistake += 1
             }
             MoveBadge::Blunder => {
-                move_counts.blunder += 1
+                move_counts_black.blunder += 1
             }
             MoveBadge::Miss => {
-                move_counts.miss += 1
+                move_counts_black.miss += 1
             }
             MoveBadge::Book => {
-                move_counts.book += 1
+                move_counts_black.book += 1
             }
             MoveBadge::Forced => {
-                move_counts.forced += 1
+                move_counts_black.forced += 1
             }
         }
+        } 
 
         // Construct AnalyzedMove data
         let analyzed_move = AnalyzedMove {
@@ -309,7 +356,8 @@ fn run_analysis_pipeline(
             black_win_loss,
             black_moves,
         ),
-        move_counts,
+        move_counts_black,
+        move_counts_white,
         metadata,
     };
 

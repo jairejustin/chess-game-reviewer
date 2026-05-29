@@ -70,6 +70,7 @@ pub struct GameMetadata {
 pub struct AnalysisSummary {
     pub white_accuracy: f64,
     pub black_accuracy: f64,
-    pub move_counts: MoveCounts,
+    pub move_counts_white: MoveCounts,
+    pub move_counts_black: MoveCounts,
     pub metadata: GameMetadata,
 }
