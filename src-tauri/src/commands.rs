@@ -225,6 +225,7 @@ fn run_analysis_pipeline(
             classification,
             current_win_loss,
             best_move_san,
+            played_uci,
         ) = evaluate_move_context(
             &san,
             &fen,
@@ -327,6 +328,7 @@ fn run_analysis_pipeline(
             ply: ply_count,
             san: san.clone(),
             fen: fen.clone(),
+            uci: played_uci,
             played_eval: normalized_cp,
             prev_best_eval: prev_eval,
             best_move_san,
@@ -385,7 +387,7 @@ fn evaluate_move_context(
     multi_pv_evals: &[i32],
     ply_count: u32,
     book: &OpeningBook,
-) -> (MoveBadge, f64, String) {
+) -> (MoveBadge, f64, String, String) {
     // A multiplier to convert White-normalized scores into the moving player's perspective.
     let pov_multiplier =
         if ply_count % 2 != 0 { 1 } else { -1 };
@@ -415,6 +417,14 @@ fn evaluate_move_context(
                 .ok()
             });
 
+    // Parses the played SAN move and converts it to a standard UCI string        
+    let played_uci = prev_pos.as_ref().and_then(|pos| {
+        San::from_ascii(san.as_bytes()).ok()
+            .and_then(|s| s.to_move(pos).ok())
+            // Fix: Pass the owned move `m` and the standard castling mode
+            .map(|m| UciMove::from_move(m, CastlingMode::Standard).to_string())
+    }).unwrap_or_default();
+    
     // Parsed board state after the move.
     // Is used to check for sacrifices.
     let current_pos_opt =
@@ -516,5 +526,6 @@ fn evaluate_move_context(
         classification,
         current_win_loss,
         best_move_san,
+        played_uci,
     )
 }

@@ -25,6 +25,7 @@ pub struct AnalyzedMove {
     pub ply: u32,
     pub san: String,
     pub fen: String,
+    pub uci: String,
     pub played_eval: i32,
     pub mate_in: Option<i32>,
     pub prev_best_eval: i32,
