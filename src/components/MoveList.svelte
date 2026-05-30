@@ -4,6 +4,7 @@
   import Badge from './Badge.svelte';
 
   import Loader2 from 'lucide-svelte/icons/loader-2';
+  import Figurine from './Figurine.svelte';
 </script>
 
 <div class="move-list">
@@ -27,7 +28,9 @@
           <span class="move-list__ply">
             {Math.ceil(move.ply / 2)}{move.ply % 2 !== 0 ? '.' : '...'}
           </span>
-          <span class="move-list__san">{move.san}</span>
+          <span class="move-list__san">
+            <Figurine san={move.san} />
+          </span>
         </div>
         <div class="move-list__meta">
           <span class="move-list__eval"

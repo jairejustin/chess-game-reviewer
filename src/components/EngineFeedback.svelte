@@ -1,6 +1,7 @@
 <script lang="ts">
   import { moves, activePly } from '../store/gameStore';
   import { tallyLabels, formatEval } from '../utils/ui';
+  import Figurine from './Figurine.svelte';
   import Badge from './Badge.svelte';
 
   $: currentMove = $moves[$activePly];
@@ -18,16 +19,20 @@
     <div class="engine-feedback__comparison">
       <div class="engine-line">
         <span class="engine-line__label">Played:</span>
-        <span class="engine-line__move">{currentMove.san}</span>
+        <span class="engine-line__move">
+          <Figurine san={currentMove.san}/>
+        </span>
         <span class="engine-line__eval"
-          >{formatEval(currentMove.playedEval, currentMove.mateIn)}</span
-        >
+          >{formatEval(currentMove.playedEval, currentMove.mateIn)}
+        </span>
       </div>
 
       {#if !['best', 'book', 'forced', 'great', 'brilliant'].includes(currentMove.classification)}
         <div class="engine-line engine-line--best">
           <span class="engine-line__label">Best:</span>
-          <span class="engine-line__move">{currentMove.bestMoveSan}</span>
+          <span class="engine-line__move">
+            <Figurine san={currentMove.bestMoveSan}/>
+          </span>
           <span class="engine-line__eval"
             >{formatEval(currentMove.prevBestEval)}</span
           >
