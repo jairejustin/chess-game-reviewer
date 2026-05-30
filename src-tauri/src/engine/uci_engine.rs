@@ -79,7 +79,7 @@ impl UciEngine {
     pub fn analyze_position(
         &mut self,
         fen: &str,
-        depth: u8,
+        time_ms: u32,
     ) -> (Evaluation, String, Vec<String>, Vec<i32>)
     {
         self.send_command(&format!(
@@ -87,14 +87,14 @@ impl UciEngine {
             fen
         ));
         self.send_command(&format!(
-            "go depth {}",
-            depth
+            "go movetime {}",
+            time_ms
         ));
 
         let mut last_eval = Evaluation::Cp(0);
         let mut last_pv = Vec::new();
         let mut best_move = String::new();
-        let mut multi_pv_evals = vec![0; 3];
+        let mut multi_pv_evals = vec![0; 2];
 
         let mut line = String::new();
         while self

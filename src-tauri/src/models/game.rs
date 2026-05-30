@@ -75,4 +75,13 @@ pub struct AnalysisSummary {
     pub move_counts_white: MoveCounts,
     pub move_counts_black: MoveCounts,
     pub metadata: GameMetadata,
+    pub moves: Vec<AnalyzedMove>,
+}
+
+// Analysis progress
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AnalysisProgress {
+    pub current_ply: u32,
+    pub total_plies: u32,
 }

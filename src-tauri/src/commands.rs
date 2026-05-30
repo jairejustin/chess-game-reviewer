@@ -13,7 +13,7 @@ use crate::math::calculate_accuracy;
 #[allow(unused_imports)]
 use crate::models::game::{
     AnalysisSummary, AnalyzedMove, GameMetadata,
-    MoveBadge, MoveCounts,
+    MoveBadge, MoveCounts, AnalysisProgress,
 };
 use crate::pgn::PgnVisitor;
 use pgn_reader::Reader;
@@ -30,17 +30,17 @@ use shakmaty::{
 pub fn analyze_game(
     app: AppHandle,
     pgn: String,
-    target_depth: Option<u8>,
+    target_time_ms: Option<u32>,
 ) -> Result<(), String> {
-    // The search depth for the UCI chess engine
-    let depth = target_depth.unwrap_or(15);
+    // The search time for the UCI chess engine
+    let time_ms = target_time_ms.unwrap_or(1500);
 
     // Spawn a dedicated background thread for the blocking UCI engine
     std::thread::spawn(move || {
         if let Err(e) = run_analysis_pipeline(
             app.clone(),
             pgn,
-            depth,
+            time_ms,
         ) {
             let _ =
                 app.emit("analysis-error", &e);
@@ -53,7 +53,7 @@ pub fn analyze_game(
 fn run_analysis_pipeline(
     app: AppHandle,
     pgn: String,
-    depth: u8,
+    time_ms: u32,
 ) -> Result<(), String> {
     app.emit("analysis-started", ())
         .map_err(|e| e.to_string())?;
@@ -112,7 +112,7 @@ fn run_analysis_pipeline(
         _,
         initial_multi_pv_evals,
     ) = engine
-        .analyze_position(initial_fen, depth);
+        .analyze_position(initial_fen, time_ms);
 
     // The evaluation score from the position immediately preceding the move the player is about to make.
     let mut prev_eval = match initial_eval {
@@ -184,6 +184,11 @@ fn run_analysis_pipeline(
         book: 0,
         forced: 0,
     };
+    
+    // Total plies for progress tracking
+    let total_plies = positions.len() as u32;
+
+    let mut analyzed_moves_collection = Vec::with_capacity(positions.len());
 
     // Iterates over the moves and analyzes them
     for (san, fen) in positions {
@@ -193,7 +198,7 @@ fn run_analysis_pipeline(
             opponent_best_move,
             pv,
             multi_pv_evals,
-        ) = engine.analyze_position(&fen, depth);
+        ) = engine.analyze_position(&fen, time_ms);
 
         // Get evaluation for the played move
         let (played_cp, mate_in) = match played_eval {
@@ -336,9 +341,16 @@ fn run_analysis_pipeline(
             principal_variation: pv,
             mate_in: normalized_mate,
         };
+        
+        // Collect the analyzed move
+        analyzed_moves_collection.push(analyzed_move);
 
-        // Emit analyzed move
-        app.emit("batch-tick", &analyzed_move)
+        // Emit progress
+        let progress = AnalysisProgress {
+            current_ply: ply_count,
+            total_plies,
+        };
+        app.emit("analysis-progress", progress)
             .map_err(|e| e.to_string())?;
 
         // Update iteration state
@@ -366,6 +378,7 @@ fn run_analysis_pipeline(
         move_counts_black,
         move_counts_white,
         metadata,
+        moves: analyzed_moves_collection,
     };
 
     // Emit analysis completion
