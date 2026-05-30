@@ -2,6 +2,7 @@
   import { analysisSummary } from '../store/gameStore';
   import { tallyLabels, formatAccuracy, activeTallyRows } from '../utils/ui';
   import Badge from './Badge.svelte';
+  import EvalGraph from './EvalGraph.svelte';
 </script>
 
 <div class="summary">
@@ -11,6 +12,11 @@
     </div>
   {:else}
     {@const s = $analysisSummary}
+
+    <div class="summary__section">
+      <h3 class="summary__section-title">Evaluation</h3>
+      <EvalGraph />
+    </div>
 
     <div class="summary__section">
       <h3 class="summary__section-title">Accuracy</h3>
@@ -122,7 +128,7 @@
   .summary__player {
     display: flex;
     align-items: center;
-    gap: 0.2rem;
+    gap: 0.4rem;
   }
   .summary__player-dot {
     width: 9px;
