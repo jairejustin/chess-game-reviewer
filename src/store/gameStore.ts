@@ -1,11 +1,15 @@
 import { writable, derived } from 'svelte/store';
-import type { AnalyzedMove, AnalysisSummary } from '../types/game';
+import type { AnalyzedMove, AnalysisSummary, AnalysisProgress } from '../types/game';
 import { listen } from '@tauri-apps/api/event';
+
+export type SidebarView = 'import' | 'game' | 'summary';
 
 export const moves = writable<AnalyzedMove[]>([]);
 export const activePly = writable<number>(0);
 export const isAnalyzing = writable<boolean>(false);
 export const analysisSummary = writable<AnalysisSummary | null>(null);
+export const loadingProgress = writable<number>(0);
+export const sidebarView = writable<SidebarView>('import');
 
 export const currentFen = derived(
   [moves, activePly],
@@ -34,6 +38,7 @@ export const resetGame = () => {
   activePly.set(0);
   isAnalyzing.set(false);
   analysisSummary.set(null);
+  loadingProgress.set(0);
 };
 
 export async function initTauriListeners() {
@@ -42,17 +47,24 @@ export async function initTauriListeners() {
     isAnalyzing.set(true);
   });
 
-  await listen<AnalyzedMove>('batch-tick', (event) => {
-    appendMove(event.payload);
-
-    moves.subscribe((currentMoves) => {
-      activePly.set(currentMoves.length - 1);
-    })();
+  await listen<AnalysisProgress>('analysis-progress', (event) => {
+    const { currentPly, totalPlies } = event.payload;
+    if (totalPlies > 0) {
+      loadingProgress.set(currentPly / totalPlies);
+    }
   });
 
   await listen<AnalysisSummary>('analysis-complete', (event) => {
     isAnalyzing.set(false);
     analysisSummary.set(event.payload);
+    moves.set(event.payload.moves);
+    
+    if (event.payload.moves.length > 0) {
+        activePly.set(event.payload.moves.length - 1);
+    }
+    
+    loadingProgress.set(1);
+    sidebarView.set('summary');
   });
 
   await listen<string>('analysis-error', (event) => {

@@ -2,9 +2,27 @@
   import { moves, activePly, isAnalyzing } from '../store/gameStore';
   import { formatEval } from '../utils/ui';
   import Badge from './Badge.svelte';
-
+  // Remove the tick import
+  
   import Loader2 from 'lucide-svelte/icons/loader-2';
   import Figurine from './Figurine.svelte';
+
+  // THE NEW SVELTE ACTION
+  function autoScroll(node: HTMLElement, isActive: boolean) {
+    // Run once when the node mounts
+    if (isActive) {
+      node.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    return {
+      // Run every time the isActive variable changes
+      update(newIsActive: boolean) {
+        if (newIsActive) {
+          node.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      }
+    };
+  }
 </script>
 
 <div class="move-list">
@@ -20,9 +38,11 @@
   {:else}
     {#each $moves as move, index}
       <button
+        id="ply-{index}" 
         class="move-list__row"
         class:move-list__row--active={$activePly === index}
         on:click={() => activePly.set(index)}
+        use:autoScroll={$activePly === index}
       >
         <div class="move-list__info">
           <span class="move-list__ply">

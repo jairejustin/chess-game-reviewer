@@ -11,6 +11,11 @@ export interface AnalyzedMove {
   mateIn: number | null;
 }
 
+export interface AnalysisProgress {
+  currentPly: number;
+  totalPlies: number;
+}
+
 export type MoveBadge =
   | 'book'
   | 'brilliant'
@@ -52,4 +57,5 @@ export interface AnalysisSummary {
   moveCountsWhite: MoveCounts;
   moveCountsBlack: MoveCounts;
   metadata: GameMetadata;
+  moves: AnalyzedMove[];
 }

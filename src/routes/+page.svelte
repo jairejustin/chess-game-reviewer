@@ -7,7 +7,9 @@
     activePly,
     currentFen,
     initTauriListeners,
-    isAnalyzing
+    isAnalyzing,
+    loadingProgress,
+    sidebarView,
   } from '../store/gameStore';
   import { getInBoardBadge, badgeColors } from '../utils/boardBadges';
 
@@ -33,8 +35,6 @@
 
   $: material = calculateMaterial($currentFen || 'start');
 
-  type SidebarView = 'import' | 'game' | 'summary';
-  let sidebarView: SidebarView = 'import'; // Default to the new import tab
   let destHighlight = 'rgba(155, 199, 0, 0.41)';
 
   let cgConfig: any = { fen: 'start', viewOnly: true };
@@ -88,7 +88,7 @@
     const pgn = `[Event "Test"]\n[White "Player1"]\n[Black "Player2"]\n[Result "1-0"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. b4 Bxb4 5. c3 Ba5 6. d4 exd4 7. O-O d3 8. Qb3 Qf6 9. e5 Qg6 10. Re1 Nge7 11. Ba3 b5 12. Qxb5 Rb8 13. Qa4 Bb6 14. Nbd2 Bb7 15. Ne4 Qf5 16. Bxd3 Qh5 17. Nf6+ gxf6 18. exf6 Rg8 19. Rad1 Qxf3 20. Rxe7+ Nxe7 21. Qxd7+ Kxd7 22. Bf5+ Ke8 23. Bd7+ Kf8 24. Bxe7# 1-0`;
     try {
       await invoke('analyze_game', { pgn });
-      sidebarView = 'game'; // Switch to game view automatically when analysis starts
+      $sidebarView = 'game'; // Switch to game view automatically when analysis starts
     } catch (e) {
       console.error('Analysis failed:', e);
     }
@@ -152,35 +152,34 @@
 
   <aside class="sidebar">
     <div class="sidebar__header">
-      <h2 class="sidebar__title">Analysis Room</h2>
-      <span class="sidebar__ply-count">{$moves.length} plies</span>
+      <h2 class="sidebar__title">Game Analysis</h2>
     </div>
 
     <div class="sidebar__nav">
       <button
         class="sidebar__nav-btn"
-        class:sidebar__nav-btn--active={sidebarView === 'import'}
-        on:click={() => (sidebarView = 'import')}
+        class:sidebar__nav-btn--active={$sidebarView === 'import'}
+        on:click={() => ($sidebarView = 'import')}
       >
         Import
       </button>
       <button
         class="sidebar__nav-btn"
-        class:sidebar__nav-btn--active={sidebarView === 'game'}
-        on:click={() => (sidebarView = 'game')}
+        class:sidebar__nav-btn--active={$sidebarView === 'game'}
+        on:click={() => ($sidebarView = 'game')}
       >
         Game
       </button>
       <button
         class="sidebar__nav-btn"
-        class:sidebar__nav-btn--active={sidebarView === 'summary'}
-        on:click={() => (sidebarView = 'summary')}
+        class:sidebar__nav-btn--active={$sidebarView === 'summary'}
+        on:click={() => ($sidebarView = 'summary')}
       >
         Summary
       </button>
     </div>
 
-    {#if sidebarView === 'import'}
+    {#if $sidebarView === 'import'}
       <div class="import-tab">
         <h3 class="import-tab__title">Fetch Online Games</h3>
         <p class="import-tab__desc">
@@ -215,13 +214,28 @@
           {/if}
         </button>
       </div>
-    {:else if sidebarView === 'game'}
-      <EngineFeedback />
-      <MoveList />
-      <div class="sidebar__controls">
-        <BoardControls />
-      </div>
-    {:else if sidebarView === 'summary'}
+    {:else if $sidebarView === 'game'}
+      {#if $isAnalyzing}
+        <div class="loading-overlay">
+          <div class="loading-overlay__icon-wrapper">
+            <Loader2 size={48} class="spin" strokeWidth={2} />
+          </div>
+          <h3 class="loading-overlay__title">Analyzing...</h3>
+          <p class="loading-overlay__desc">The engine is evaluating</p>
+          
+          <div class="progress-track">
+            <div class="progress-fill" style="width: {$loadingProgress * 100}%"></div>
+          </div>
+          <span class="progress-text">{Math.round($loadingProgress * 100)}%</span>
+        </div>
+      {:else}
+        <EngineFeedback />
+        <MoveList />
+        <div class="sidebar__controls">
+          <BoardControls />
+        </div>
+      {/if}
+    {:else if $sidebarView === 'summary'}
       <GameSummary />
     {/if}
   </aside>
@@ -413,11 +427,6 @@
     letter-spacing: 1px;
     color: #fff;
   }
-  .sidebar__ply-count {
-    font-size: 0.8rem;
-    color: #555;
-    font-weight: 600;
-  }
 
   /* ── Nav switcher ────────────────────────────────────────────────── */
   .sidebar__nav {
@@ -555,5 +564,57 @@
   .analyze-btn:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+  }
+  /* ── Loading Overlay ─────────────────────────────────────────────── */
+  .loading-overlay {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    text-align: center;
+  }
+  
+  .loading-overlay__icon-wrapper {
+    color: #8be1b4;
+    margin-bottom: 2rem;
+  }
+  
+  .loading-overlay__title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.5rem;
+    letter-spacing: 1px;
+    color: #ececec;
+    margin: 0 0 0.5rem 0;
+  }
+  
+  .loading-overlay__desc {
+    font-size: 0.9rem;
+    color: #888;
+    margin: 0 0 2rem 0;
+  }
+  
+  .progress-track {
+    width: 80%;
+    height: 6px;
+    background: #111;
+    border: 1px solid #333;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+  }
+  
+  .progress-fill {
+    height: 100%;
+    background: #8be1b4;
+    transition: width 0.15s ease-out;
+  }
+  
+  .progress-text {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.2rem;
+    color: #8be1b4;
+    letter-spacing: 1px;
   }
 </style>
