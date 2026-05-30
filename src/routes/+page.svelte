@@ -1,7 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { chessground } from '../actions/chessground';
-  import { moves, currentFen, initTauriListeners } from '../store/gameStore';
+  import {
+    moves,
+    activePly,
+    currentFen,
+    initTauriListeners
+  } from '../store/gameStore';
+  import { getInBoardBadge, badgeColors } from '../utils/boardBadges';
 
   import EvalBar from '../components/EvalBar.svelte';
   import BoardControls from '../components/BoardControls.svelte';
@@ -20,6 +26,56 @@
   type SidebarView = 'game' | 'summary';
   let sidebarView: SidebarView = 'game';
 
+  let destHighlight = 'rgba(155, 199, 0, 0.41)';
+
+  let cgConfig: any = { fen: 'start', viewOnly: true };
+
+  $: {
+    const move = $moves[$activePly];
+    let autoShapes = [];
+    let lastMove: string[] = [];
+    destHighlight = 'rgba(155, 199, 0, 0.41)'; // Reset on ply change
+
+    if (
+      move &&
+      move.ply > 0 &&
+      typeof move.uci === 'string' &&
+      move.uci.length >= 4
+    ) {
+      const orig = move.uci.substring(0, 2);
+      const dest = move.uci.substring(2, 4);
+      lastMove = [orig, dest];
+
+      if (move.classification) {
+        destHighlight = badgeColors[move.classification] + '66';
+
+        autoShapes.push({
+          orig: dest,
+          brush: 'invisible',
+          customSvg: { html: getInBoardBadge(move.classification) }
+        });
+      }
+    }
+
+    cgConfig = {
+      fen: $currentFen || 'start',
+      viewOnly: true,
+      lastMove,
+      drawable: {
+        brushes: {
+          invisible: {
+            key: 'i',
+            color: 'transparent',
+            opacity: 0,
+            lineWidth: 1
+          }
+        },
+        autoShapes,
+        visible: true
+      }
+    };
+  }
+
   onMount(() => {
     initTauriListeners().catch(console.error);
   });
@@ -31,7 +87,8 @@
       <EvalBar />
       <div
         class="board"
-        use:chessground={{ fen: $currentFen, viewOnly: true }}
+        style="--move-highlight: {destHighlight};"
+        use:chessground={cgConfig}
       ></div>
     </div>
     <BoardControls />
@@ -76,6 +133,25 @@
     color: #ececec;
     font-family: 'Outfit', system-ui, sans-serif;
     margin: 0;
+  }
+
+  :global(.cg-wrap square.last-move) {
+    background-color: var(--move-highlight) !important;
+  }
+
+  :global(.badge-anim) {
+    animation: badge-pop-in 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.10s both;
+  }
+
+  @keyframes badge-pop-in {
+    0% { 
+      opacity: 0; 
+      transform: scale(0.5); 
+    }
+    100% { 
+      opacity: 1; 
+      transform: scale(1); 
+    }
   }
 
   /* ── Layout ──────────────────────────────────────────────────────── */

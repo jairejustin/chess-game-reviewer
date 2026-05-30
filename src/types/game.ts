@@ -2,6 +2,7 @@ export interface AnalyzedMove {
   ply: number;
   san: string;
   fen: string;
+  uci: String;
   prevBestEval: number;
   playedEval: number;
   bestMoveSan: string;
