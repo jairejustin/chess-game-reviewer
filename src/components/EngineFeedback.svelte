@@ -20,7 +20,7 @@
       <div class="engine-line">
         <span class="engine-line__label">Played:</span>
         <span class="engine-line__move">
-          <Figurine san={currentMove.san}/>
+          <Figurine san={currentMove.san} />
         </span>
         <span class="engine-line__eval"
           >{formatEval(currentMove.playedEval, currentMove.mateIn)}
@@ -31,7 +31,7 @@
         <div class="engine-line engine-line--best">
           <span class="engine-line__label">Best:</span>
           <span class="engine-line__move">
-            <Figurine san={currentMove.bestMoveSan}/>
+            <Figurine san={currentMove.bestMoveSan} />
           </span>
           <span class="engine-line__eval"
             >{formatEval(currentMove.prevBestEval)}</span

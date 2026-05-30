@@ -43,8 +43,12 @@
     gap: 10px;
     width: 56px;
     flex-shrink: 0;
+    height: 100%;
   }
+
   .eval-bar__track {
+    width: 24px;
+    flex: 1;
     width: 24px;
     flex: 1;
     border-radius: 8px;
