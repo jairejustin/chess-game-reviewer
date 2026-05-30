@@ -42,9 +42,16 @@ impl UciEngine {
     fn init(&mut self) {
         self.send_command("uci");
         self.wait_for("uciok");
-        self.send_command(
-            "setoption name MultiPV value 3",
-        );
+        
+        // Allocates 128MB of RAM for the engine's transposition table
+        self.send_command("setoption name Hash value 128");
+        
+        // Allows the engine to use 2 parallel threads
+        self.send_command("setoption name Threads value 2");
+        
+        // Calculates 2 PV
+        self.send_command("setoption name MultiPV value 2");
+        
         self.send_command("isready");
         self.wait_for("readyok");
     }
@@ -113,7 +120,7 @@ impl UciEngine {
                 };
 
                 // Store the evaluation for the respective PV line
-                if multipv > 0 && multipv <= 3 {
+                if multipv > 0 && multipv <= 2 {
                     multi_pv_evals[multipv - 1] =
                         cp;
                 }
