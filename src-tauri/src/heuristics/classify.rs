@@ -94,7 +94,7 @@ pub fn classify(
 
     // Upgrades & Overrides
 
-    // THE MISS: If the opponent's previous move resulted in a large drop for them (>= 5%),
+    // MISS: If the opponent's previous move resulted in a large drop for them (>= 5%),
     // but our current move gives 70% to 140% of that advantage right back.
     // It's a bad/inaccurate move that fails to punish a bad move from opponent.
     // Or just misses a faster way to win the game
@@ -103,6 +103,17 @@ pub fn classify(
         && win_loss <= (args.prev_win_loss * 1.4)
     {
         classification = MoveBadge::Miss;
+    }
+
+    // MISTAKE Override: 
+    // If the player had a highly winning position (e.g., > +3.0 / 300cp) and made a massive 
+    // drop in evaluation, but the resulting position is still equal or better (>= 0cp), 
+    // it shouldn't be a Blunder. They didn't lose the game, they just threw away the win.
+    if classification == MoveBadge::Blunder 
+        && args.prev_eval >= 300 
+        && args.played_eval >= 0 
+    {
+        classification = MoveBadge::Mistake; 
     }
 
     // GREAT MOVE: If the played move matches the best move, AND the second-best move
@@ -287,7 +298,7 @@ mod tests {
     fn blunder_by_win_percent_drop() {
         let args = ClassifyArgs {
             prev_eval: 400,
-            played_eval: 0,
+            played_eval: -50,
             prev_best_eval: 400,
             multi_pv_evals: &[400, 300],
             ..Default::default()
@@ -295,6 +306,21 @@ mod tests {
         assert_eq!(
             classify(args).0,
             MoveBadge::Blunder
+        );
+    }
+
+    #[test]
+    fn mistake_by_equalizing_position_from_winning() {
+        let args = ClassifyArgs {
+            prev_eval: 400,
+            played_eval: 0,
+            prev_best_eval: 400,
+            multi_pv_evals: &[400, 300],
+            ..Default::default()
+        };
+        assert_eq!(
+            classify(args).0,
+            MoveBadge::Mistake
         );
     }
 
