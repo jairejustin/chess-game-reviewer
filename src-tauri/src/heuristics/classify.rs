@@ -105,15 +105,15 @@ pub fn classify(
         classification = MoveBadge::Miss;
     }
 
-    // MISTAKE Override: 
-    // If the player had a highly winning position (e.g., > +3.0 / 300cp) and made a massive 
-    // drop in evaluation, but the resulting position is still equal or better (>= 0cp), 
+    // MISTAKE Override:
+    // If the player had a highly winning position (e.g., > +3.0 / 300cp) and made a massive
+    // drop in evaluation, but the resulting position is still equal or better (>= 0cp),
     // it shouldn't be a Blunder. They didn't lose the game, they just threw away the win.
-    if classification == MoveBadge::Blunder 
-        && args.prev_eval >= 300 
-        && args.played_eval >= 0 
+    if classification == MoveBadge::Blunder
+        && args.prev_eval >= 300
+        && args.played_eval >= 0
     {
-        classification = MoveBadge::Mistake; 
+        classification = MoveBadge::Mistake;
     }
 
     // GREAT MOVE: If the played move matches the best move, AND the second-best move
@@ -310,7 +310,8 @@ mod tests {
     }
 
     #[test]
-    fn mistake_by_equalizing_position_from_winning() {
+    fn mistake_by_equalizing_position_from_winning(
+    ) {
         let args = ClassifyArgs {
             prev_eval: 400,
             played_eval: 0,
