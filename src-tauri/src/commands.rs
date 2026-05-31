@@ -199,89 +199,122 @@ fn run_analysis_pipeline(
     let mut uci_moves_history = Vec::new();
     let mut board = Chess::default();
 
+    // Helper: Converts UCI strings to SAN
+    let get_san = |uci_str: &str, pos_opt: &Option<Chess>| -> String {
+        if let Some(pos) = pos_opt {
+            if let Ok(uci) = UciMove::from_ascii(uci_str.as_bytes()) {
+                if let Ok(m) = uci.to_move(pos) {
+                    return San::from_move(pos, m).to_string();
+                }
+            }
+        }
+        uci_str.to_string()
+    };
+
+    // Helper: Extracts pure CP scores
+    let extract_cp = |eval: &Evaluation| -> i32 {
+        match eval {
+            Evaluation::Cp(cp) => *cp,
+            Evaluation::Mate(m) => if *m > 0 { 10000 } else { -10000 }
+        }
+    };
+
     // Iterates over the moves and analyzes them
     for (san, fen) in positions {
-        // Generates the UCI move and update the board state
-        let parsed_san =
-            San::from_ascii(san.as_bytes()).ok();
-        let m = parsed_san
-            .and_then(|s| s.to_move(&board).ok());
+        // Determines the previous position command
+        let prev_pos_cmd = if uci_moves_history.is_empty() {
+            "position startpos".to_string()
+        } else {
+            format!("position startpos moves {}", uci_moves_history.join(" "))
+        };
 
-        let played_uci =
-            if let Some(ref valid_move) = m {
-                UciMove::from_move(
-                    valid_move.clone(),
-                    CastlingMode::Standard,
-                )
-                .to_string()
-            } else {
-                String::new()
-            };
+        // Plays move on board and build history command
+        let parsed_san = San::from_ascii(san.as_bytes()).ok();
+        let m = parsed_san.and_then(|s| s.to_move(&board).ok());
+
+        let played_uci = if let Some(ref valid_move) = m {
+            UciMove::from_move(valid_move.clone(), CastlingMode::Standard).to_string()
+        } else {
+            String::new()
+        };
 
         if let Some(valid_move) = m {
-            board = board
-                .clone()
-                .play(valid_move)
-                .unwrap_or(board);
+            board = board.clone().play(valid_move).unwrap_or(board);
         }
 
-        // Constructs the move history command
-        uci_moves_history
-            .push(played_uci.clone());
-        let pos_cmd = format!(
-            "position startpos moves {}",
-            uci_moves_history.join(" ")
-        );
+        uci_moves_history.push(played_uci.clone());
+        let current_pos_cmd = format!("position startpos moves {}", uci_moves_history.join(" "));
 
-        let (
-            played_eval,
-            opponent_best_move,
-            pv,
-            multi_pv_evals,
-        ) = engine
-            .analyze_position(&pos_cmd, time_ms);
+        // Fast Evaluation
+        let (mut played_eval, mut opponent_best_move, mut pv, mut multi_pv_evals) = 
+            engine.analyze_position(&current_pos_cmd, time_ms);
 
-        // Get evaluation for the played move
-        let (played_cp, mate_in) =
-            match played_eval {
-                Evaluation::Cp(cp) => (cp, None),
-                Evaluation::Mate(m) => {
-                    if m > 0 {
-                        (10000, Some(m))
-                    } else {
-                        (-10000, Some(m))
-                    }
-                }
-            };
+        // Parse previous board state to convert UCI to SAN
+        let prev_pos = Fen::from_ascii(prev_fen.as_bytes()).ok()
+            .and_then(|f| f.into_position::<Chess>(CastlingMode::Standard).ok());
+        
+        // What move was the player expected to play?
+        let mut best_move_san = get_san(&prev_best_move_uci, &prev_pos);
 
-        // Normalized means it is from white's perspective,
-        // white goes towards positive and black goes towards negative.
-        let normalized_cp = if ply_count % 2 != 0
-        {
-            -played_cp
-        } else {
-            played_cp
+        // Calculates the drop
+        let pov_multiplier = if ply_count % 2 != 0 { 1 } else { -1 };
+        let mut played_cp = extract_cp(&played_eval);
+        let mut normalized_cp = if ply_count % 2 != 0 { -played_cp } else { played_cp };
+
+        let class_prev_eval = prev_eval * pov_multiplier;
+        let class_played_eval = normalized_cp * pov_multiplier;
+        let eval_drop = class_prev_eval - class_played_eval;
+
+        // If the player played the exact best move, but the evaluation inexplicably dropped 
+        // by more than x centipawn threshold, the engine likely suffered from horizon effect.
+        if san == best_move_san && eval_drop > 60 {
+
+            // 3.5s investigation allocation
+            let deep_time = 3500; 
+
+            // Re-evaluate the prev position deeply
+            let (deep_prev_eval, deep_prev_best, _, deep_prev_multi) = 
+                engine.analyze_position(&prev_pos_cmd, deep_time);
+            
+            // Re-evaluate the current position deeply
+            let (deep_played_eval, deep_opp_best, deep_pv, deep_multi) = 
+                engine.analyze_position(&current_pos_cmd, deep_time);
+
+            // Overwrite Previous State
+            let deep_prev_cp = extract_cp(&deep_prev_eval);
+            prev_eval = if ply_count % 2 != 0 { deep_prev_cp } else { -deep_prev_cp };
+            prev_best_move_uci = deep_prev_best;
+            prev_multi_pv_evals = deep_prev_multi;
+            
+            // Re-calculate the expected move in case the deep search changed its mind
+            best_move_san = get_san(&prev_best_move_uci, &prev_pos);
+
+            // Overwrite Current State
+            played_eval = deep_played_eval;
+            opponent_best_move = deep_opp_best;
+            pv = deep_pv;
+            multi_pv_evals = deep_multi;
+
+            played_cp = extract_cp(&played_eval);
+            normalized_cp = if ply_count % 2 != 0 { -played_cp } else { played_cp };
+        }
+
+        let mate_in = match played_eval {
+            Evaluation::Mate(m) => Some(m),
+            _ => None,
         };
 
         let normalized_mate = mate_in.map(|m| {
-            if ply_count % 2 != 0 {
-                -m
-            } else {
-                m
-            }
+            if ply_count % 2 != 0 { -m } else { m }
         });
 
-        // Delegate to isolated logic helper.
-        let (
-            classification,
-            current_win_loss,
-            best_move_san,
-        ) = evaluate_move_context(
+        // Delegate to isolated logic helper
+        let (classification, current_win_loss) = evaluate_move_context(
             &san,
             &fen,
             &prev_san,
             &prev_fen,
-            &prev_best_move_uci,
+            &best_move_san,
             prev_eval,
             normalized_cp,
             prev_win_loss,
@@ -290,92 +323,40 @@ fn run_analysis_pipeline(
             &book,
         );
 
-        //
-        let positive_loss =
-            current_win_loss.max(0.0);
+        let positive_loss = current_win_loss.max(0.0);
 
         // Increments move counter and move tally
         if ply_count % 2 != 0 {
             white_win_loss += positive_loss;
             white_moves += 1;
             match classification {
-                MoveBadge::Brilliant => {
-                    move_counts_white.brilliant +=
-                        1
-                }
-                MoveBadge::Great => {
-                    move_counts_white.great += 1
-                }
-                MoveBadge::Best => {
-                    move_counts_white.best += 1
-                }
-                MoveBadge::Excellent => {
-                    move_counts_white.excellent +=
-                        1
-                }
-                MoveBadge::Good => {
-                    move_counts_white.good += 1
-                }
-                MoveBadge::Inaccuracy => {
-                    move_counts_white
-                        .inaccuracy += 1
-                }
-                MoveBadge::Mistake => {
-                    move_counts_white.mistake += 1
-                }
-                MoveBadge::Blunder => {
-                    move_counts_white.blunder += 1
-                }
-                MoveBadge::Miss => {
-                    move_counts_white.miss += 1
-                }
-                MoveBadge::Book => {
-                    move_counts_white.book += 1
-                }
-                MoveBadge::Forced => {
-                    move_counts_white.forced += 1
-                }
+                MoveBadge::Brilliant => move_counts_white.brilliant += 1,
+                MoveBadge::Great => move_counts_white.great += 1,
+                MoveBadge::Best => move_counts_white.best += 1,
+                MoveBadge::Excellent => move_counts_white.excellent += 1,
+                MoveBadge::Good => move_counts_white.good += 1,
+                MoveBadge::Inaccuracy => move_counts_white.inaccuracy += 1,
+                MoveBadge::Mistake => move_counts_white.mistake += 1,
+                MoveBadge::Blunder => move_counts_white.blunder += 1,
+                MoveBadge::Miss => move_counts_white.miss += 1,
+                MoveBadge::Book => move_counts_white.book += 1,
+                MoveBadge::Forced => move_counts_white.forced += 1,
             }
         } else {
             black_win_loss += positive_loss;
             black_moves += 1;
             match classification {
-                MoveBadge::Brilliant => {
-                    move_counts_black.brilliant +=
-                        1
-                }
-                MoveBadge::Great => {
-                    move_counts_black.great += 1
-                }
-                MoveBadge::Best => {
-                    move_counts_black.best += 1
-                }
-                MoveBadge::Excellent => {
-                    move_counts_black.excellent +=
-                        1
-                }
-                MoveBadge::Good => {
-                    move_counts_black.good += 1
-                }
-                MoveBadge::Inaccuracy => {
-                    move_counts_black
-                        .inaccuracy += 1
-                }
-                MoveBadge::Mistake => {
-                    move_counts_black.mistake += 1
-                }
-                MoveBadge::Blunder => {
-                    move_counts_black.blunder += 1
-                }
-                MoveBadge::Miss => {
-                    move_counts_black.miss += 1
-                }
-                MoveBadge::Book => {
-                    move_counts_black.book += 1
-                }
-                MoveBadge::Forced => {
-                    move_counts_black.forced += 1
-                }
+                MoveBadge::Brilliant => move_counts_black.brilliant += 1,
+                MoveBadge::Great => move_counts_black.great += 1,
+                MoveBadge::Best => move_counts_black.best += 1,
+                MoveBadge::Excellent => move_counts_black.excellent += 1,
+                MoveBadge::Good => move_counts_black.good += 1,
+                MoveBadge::Inaccuracy => move_counts_black.inaccuracy += 1,
+                MoveBadge::Mistake => move_counts_black.mistake += 1,
+                MoveBadge::Blunder => move_counts_black.blunder += 1,
+                MoveBadge::Miss => move_counts_black.miss += 1,
+                MoveBadge::Book => move_counts_black.book += 1,
+                MoveBadge::Forced => move_counts_black.forced += 1,
             }
         }
 
@@ -387,15 +368,14 @@ fn run_analysis_pipeline(
             uci: played_uci,
             played_eval: normalized_cp,
             prev_best_eval: prev_eval,
-            best_move_san,
+            best_move_san: best_move_san.clone(),
             classification,
             principal_variation: pv,
             mate_in: normalized_mate,
         };
 
         // Collect the analyzed move
-        analyzed_moves_collection
-            .push(analyzed_move);
+        analyzed_moves_collection.push(analyzed_move);
 
         // Emit progress
         let progress = AnalysisProgress {
@@ -445,14 +425,14 @@ fn evaluate_move_context(
     fen: &str,
     prev_san: &str,
     prev_fen: &str,
-    prev_best_move_uci: &str,
+    best_move_san: &str,
     prev_eval: i32,
     normalized_cp: i32,
     prev_win_loss: f64,
     multi_pv_evals: &[i32],
     ply_count: u32,
     book: &OpeningBook,
-) -> (MoveBadge, f64, String) {
+) -> (MoveBadge, f64) {
     // A multiplier to convert White-normalized scores into the moving player's perspective.
     let pov_multiplier =
         if ply_count % 2 != 0 { 1 } else { -1 };
@@ -538,27 +518,7 @@ fn evaluate_move_context(
         })
         .unwrap_or(false);
 
-    // Engine best move converted to SAN
-    let best_move_san = if let Some(pos) =
-        &prev_pos
-    {
-        if let Ok(uci) = UciMove::from_ascii(
-            prev_best_move_uci.as_bytes(),
-        ) {
-            if let Ok(m) = uci.to_move(pos) {
-                San::from_move(pos, m).to_string()
-            } else {
-                prev_best_move_uci.to_string()
-            }
-        } else {
-            prev_best_move_uci.to_string()
-        }
-    } else {
-        prev_best_move_uci.to_string()
-    };
-
-    let is_best_engine_move =
-        san == best_move_san;
+    let is_best_engine_move = san == best_move_san;
 
     // Construct classification arguments
     let classify_args = ClassifyArgs {
@@ -582,6 +542,5 @@ fn evaluate_move_context(
     (
         classification,
         current_win_loss,
-        best_move_san,
     )
 }
