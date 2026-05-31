@@ -52,7 +52,7 @@ pub fn classify(
 
     // The drop in win probability caused by the move.
     // Is used as the primary metric for assigning base classifications.
-    let win_loss =
+    let mut win_loss =
         calculate_win_percent(args.prev_eval)
             - calculate_win_percent(
                 args.played_eval,
@@ -129,6 +129,13 @@ pub fn classify(
         && args.played_eval > 0
     {
         classification = MoveBadge::Brilliant;
+    }
+
+    if classification == MoveBadge::Best
+        || classification == MoveBadge::Great
+        || classification == MoveBadge::Brilliant
+    {
+        win_loss = win_loss.min(0.0);
     }
 
     (classification, win_loss)

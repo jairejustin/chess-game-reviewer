@@ -12,8 +12,9 @@ use crate::math::calculate_accuracy;
 
 #[allow(unused_imports)]
 use crate::models::game::{
-    AnalysisSummary, AnalyzedMove, GameMetadata,
-    MoveBadge, MoveCounts, AnalysisProgress,
+    AnalysisProgress, AnalysisSummary,
+    AnalyzedMove, GameMetadata, MoveBadge,
+    MoveCounts,
 };
 use crate::pgn::PgnVisitor;
 use pgn_reader::Reader;
@@ -105,14 +106,18 @@ fn run_analysis_pipeline(
     // Starting position
     let initial_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
+    let initial_pos_cmd = "position startpos";
+
     // Loads Starting position
     let (
         initial_eval,
         initial_best_move,
         _,
         initial_multi_pv_evals,
-    ) = engine
-        .analyze_position(initial_fen, time_ms);
+    ) = engine.analyze_position(
+        initial_pos_cmd,
+        time_ms,
+    );
 
     // The evaluation score from the position immediately preceding the move the player is about to make.
     let mut prev_eval = match initial_eval {
@@ -184,33 +189,70 @@ fn run_analysis_pipeline(
         book: 0,
         forced: 0,
     };
-    
+
     // Total plies for progress tracking
     let total_plies = positions.len() as u32;
 
-    let mut analyzed_moves_collection = Vec::with_capacity(positions.len());
+    let mut analyzed_moves_collection =
+        Vec::with_capacity(positions.len());
+
+    let mut uci_moves_history = Vec::new();
+    let mut board = Chess::default();
 
     // Iterates over the moves and analyzes them
     for (san, fen) in positions {
-        // Get engine evaluation
+        // Generates the UCI move and update the board state
+        let parsed_san =
+            San::from_ascii(san.as_bytes()).ok();
+        let m = parsed_san
+            .and_then(|s| s.to_move(&board).ok());
+
+        let played_uci =
+            if let Some(ref valid_move) = m {
+                UciMove::from_move(
+                    valid_move.clone(),
+                    CastlingMode::Standard,
+                )
+                .to_string()
+            } else {
+                String::new()
+            };
+
+        if let Some(valid_move) = m {
+            board = board
+                .clone()
+                .play(valid_move)
+                .unwrap_or(board);
+        }
+
+        // Constructs the move history command
+        uci_moves_history
+            .push(played_uci.clone());
+        let pos_cmd = format!(
+            "position startpos moves {}",
+            uci_moves_history.join(" ")
+        );
+
         let (
             played_eval,
             opponent_best_move,
             pv,
             multi_pv_evals,
-        ) = engine.analyze_position(&fen, time_ms);
+        ) = engine
+            .analyze_position(&pos_cmd, time_ms);
 
         // Get evaluation for the played move
-        let (played_cp, mate_in) = match played_eval {
-            Evaluation::Cp(cp) => (cp, None),
-            Evaluation::Mate(m) => {
-                if m > 0 {
-                    (10000, Some(m))
-                } else {
-                    (-10000, Some(m))
+        let (played_cp, mate_in) =
+            match played_eval {
+                Evaluation::Cp(cp) => (cp, None),
+                Evaluation::Mate(m) => {
+                    if m > 0 {
+                        (10000, Some(m))
+                    } else {
+                        (-10000, Some(m))
+                    }
                 }
-            }
-        };
+            };
 
         // Normalized means it is from white's perspective,
         // white goes towards positive and black goes towards negative.
@@ -222,7 +264,11 @@ fn run_analysis_pipeline(
         };
 
         let normalized_mate = mate_in.map(|m| {
-            if ply_count % 2 != 0 { -m } else { m }
+            if ply_count % 2 != 0 {
+                -m
+            } else {
+                m
+            }
         });
 
         // Delegate to isolated logic helper.
@@ -230,7 +276,6 @@ fn run_analysis_pipeline(
             classification,
             current_win_loss,
             best_move_san,
-            played_uci,
         ) = evaluate_move_context(
             &san,
             &fen,
@@ -254,79 +299,85 @@ fn run_analysis_pipeline(
             white_win_loss += positive_loss;
             white_moves += 1;
             match classification {
-            MoveBadge::Brilliant => {
-                move_counts_white.brilliant += 1
+                MoveBadge::Brilliant => {
+                    move_counts_white.brilliant +=
+                        1
+                }
+                MoveBadge::Great => {
+                    move_counts_white.great += 1
+                }
+                MoveBadge::Best => {
+                    move_counts_white.best += 1
+                }
+                MoveBadge::Excellent => {
+                    move_counts_white.excellent +=
+                        1
+                }
+                MoveBadge::Good => {
+                    move_counts_white.good += 1
+                }
+                MoveBadge::Inaccuracy => {
+                    move_counts_white
+                        .inaccuracy += 1
+                }
+                MoveBadge::Mistake => {
+                    move_counts_white.mistake += 1
+                }
+                MoveBadge::Blunder => {
+                    move_counts_white.blunder += 1
+                }
+                MoveBadge::Miss => {
+                    move_counts_white.miss += 1
+                }
+                MoveBadge::Book => {
+                    move_counts_white.book += 1
+                }
+                MoveBadge::Forced => {
+                    move_counts_white.forced += 1
+                }
             }
-            MoveBadge::Great => {
-                move_counts_white.great += 1
-            }
-            MoveBadge::Best => {
-                move_counts_white.best += 1
-            }
-            MoveBadge::Excellent => {
-                move_counts_white.excellent += 1
-            }
-            MoveBadge::Good => {
-                move_counts_white.good += 1
-            }
-            MoveBadge::Inaccuracy => {
-                move_counts_white.inaccuracy += 1
-            }
-            MoveBadge::Mistake => {
-                move_counts_white.mistake += 1
-            }
-            MoveBadge::Blunder => {
-                move_counts_white.blunder += 1
-            }
-            MoveBadge::Miss => {
-                move_counts_white.miss += 1
-            }
-            MoveBadge::Book => {
-                move_counts_white.book += 1
-            }
-            MoveBadge::Forced => {
-                move_counts_white.forced += 1
-            }
-        }
         } else {
             black_win_loss += positive_loss;
             black_moves += 1;
             match classification {
-            MoveBadge::Brilliant => {
-                move_counts_black.brilliant += 1
-            }
-            MoveBadge::Great => {
-                move_counts_black.great += 1
-            }
-            MoveBadge::Best => {
-                move_counts_black.best += 1
-            }
-            MoveBadge::Excellent => {
-                move_counts_black.excellent += 1
-            }
-            MoveBadge::Good => {
-                move_counts_black.good += 1
-            }
-            MoveBadge::Inaccuracy => {
-                move_counts_black.inaccuracy += 1
-            }
-            MoveBadge::Mistake => {
-                move_counts_black.mistake += 1
-            }
-            MoveBadge::Blunder => {
-                move_counts_black.blunder += 1
-            }
-            MoveBadge::Miss => {
-                move_counts_black.miss += 1
-            }
-            MoveBadge::Book => {
-                move_counts_black.book += 1
-            }
-            MoveBadge::Forced => {
-                move_counts_black.forced += 1
+                MoveBadge::Brilliant => {
+                    move_counts_black.brilliant +=
+                        1
+                }
+                MoveBadge::Great => {
+                    move_counts_black.great += 1
+                }
+                MoveBadge::Best => {
+                    move_counts_black.best += 1
+                }
+                MoveBadge::Excellent => {
+                    move_counts_black.excellent +=
+                        1
+                }
+                MoveBadge::Good => {
+                    move_counts_black.good += 1
+                }
+                MoveBadge::Inaccuracy => {
+                    move_counts_black
+                        .inaccuracy += 1
+                }
+                MoveBadge::Mistake => {
+                    move_counts_black.mistake += 1
+                }
+                MoveBadge::Blunder => {
+                    move_counts_black.blunder += 1
+                }
+                MoveBadge::Miss => {
+                    move_counts_black.miss += 1
+                }
+                MoveBadge::Book => {
+                    move_counts_black.book += 1
+                }
+                MoveBadge::Forced => {
+                    move_counts_black.forced += 1
+                }
             }
         }
-        } 
 
         // Construct AnalyzedMove data
         let analyzed_move = AnalyzedMove {
@@ -341,9 +392,10 @@ fn run_analysis_pipeline(
             principal_variation: pv,
             mate_in: normalized_mate,
         };
-        
+
         // Collect the analyzed move
-        analyzed_moves_collection.push(analyzed_move);
+        analyzed_moves_collection
+            .push(analyzed_move);
 
         // Emit progress
         let progress = AnalysisProgress {
@@ -400,7 +452,7 @@ fn evaluate_move_context(
     multi_pv_evals: &[i32],
     ply_count: u32,
     book: &OpeningBook,
-) -> (MoveBadge, f64, String, String) {
+) -> (MoveBadge, f64, String) {
     // A multiplier to convert White-normalized scores into the moving player's perspective.
     let pov_multiplier =
         if ply_count % 2 != 0 { 1 } else { -1 };
@@ -430,14 +482,6 @@ fn evaluate_move_context(
                 .ok()
             });
 
-    // Parses the played SAN move and converts it to a standard UCI string        
-    let played_uci = prev_pos.as_ref().and_then(|pos| {
-        San::from_ascii(san.as_bytes()).ok()
-            .and_then(|s| s.to_move(pos).ok())
-            // Fix: Pass the owned move `m` and the standard castling mode
-            .map(|m| UciMove::from_move(m, CastlingMode::Standard).to_string())
-    }).unwrap_or_default();
-    
     // Parsed board state after the move.
     // Is used to check for sacrifices.
     let current_pos_opt =
@@ -539,6 +583,5 @@ fn evaluate_move_context(
         classification,
         current_win_loss,
         best_move_san,
-        played_uci,
     )
 }

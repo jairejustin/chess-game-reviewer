@@ -42,16 +42,22 @@ impl UciEngine {
     fn init(&mut self) {
         self.send_command("uci");
         self.wait_for("uciok");
-        
+
         // Allocates 128MB of RAM for the engine's transposition table
-        self.send_command("setoption name Hash value 128");
-        
+        self.send_command(
+            "setoption name Hash value 128",
+        );
+
         // Allows the engine to use 2 parallel threads
-        self.send_command("setoption name Threads value 2");
-        
+        self.send_command(
+            "setoption name Threads value 2",
+        );
+
         // Calculates 2 PV
-        self.send_command("setoption name MultiPV value 2");
-        
+        self.send_command(
+            "setoption name MultiPV value 2",
+        );
+
         self.send_command("isready");
         self.wait_for("readyok");
     }
@@ -78,14 +84,11 @@ impl UciEngine {
 
     pub fn analyze_position(
         &mut self,
-        fen: &str,
+        position_cmd: &str,
         time_ms: u32,
     ) -> (Evaluation, String, Vec<String>, Vec<i32>)
     {
-        self.send_command(&format!(
-            "position fen {}",
-            fen
-        ));
+        self.send_command(position_cmd);
         self.send_command(&format!(
             "go movetime {}",
             time_ms
