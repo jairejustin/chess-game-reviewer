@@ -1,4 +1,4 @@
-use crate::math::calculate_win_percent;
+use crate::heuristics::accuracy::calculate_win_percent;
 use crate::models::game::MoveBadge;
 
 /// A dependency injection struct holding all contextual data and normalized centipawn scores

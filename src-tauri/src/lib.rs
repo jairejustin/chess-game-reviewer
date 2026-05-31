@@ -1,8 +1,9 @@
 mod commands;
-mod engine;
-mod math;
+mod data;
+mod heuristics;
 mod models;
-mod pgn;
+mod pipeline;
+mod uci;
 
 use crate::commands::analyze_game;
 
