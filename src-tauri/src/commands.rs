@@ -1,4 +1,6 @@
 use crate::pipeline::analyzer::run_analysis_pipeline;
+use crate::data::fetcher::fetch_chesscom_games;
+use crate::models::fetch::{ChessComCursor, FetchResult};
 
 #[allow(unused_imports)]
 use crate::models::game::{
@@ -31,4 +33,18 @@ pub fn analyze_game(
     });
 
     Ok(())
+}
+
+#[tauri::command]
+pub async fn fetch_games(
+    username: String,
+    platform: String,
+    cursor: Option<ChessComCursor>,
+) -> Result<FetchResult, String> {
+    match platform.as_str() {
+        "chesscom" => {
+            fetch_chesscom_games(&username, cursor).await
+        }
+        _ => Err(format!("Unsupported platform: {}", platform)),
+    }
 }
