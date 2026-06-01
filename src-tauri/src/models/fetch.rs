@@ -1,17 +1,21 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(
+    Serialize, Deserialize, Debug, Clone,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum Platform {
     ChessCom,
     Lichess,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(
+    Serialize, Deserialize, Debug, Clone,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct ChessComCursor {
-    pub archive_index: usize, 
-    pub offset: usize,     
+    pub archive_index: usize,
+    pub offset: usize,
 }
 
 #[derive(Serialize, Debug)]
@@ -27,7 +31,6 @@ pub struct PlayerProfile {
     pub twitch_url: Option<String>,
     pub fide: Option<u64>,
 }
-
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -51,7 +54,6 @@ pub struct GameSummary {
     pub black: GamePlayer,
 }
 
-
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct FetchResult {
@@ -59,7 +61,6 @@ pub struct FetchResult {
     pub games: Vec<GameSummary>,
     pub cursor: Option<ChessComCursor>,
 }
-
 
 #[derive(Deserialize)]
 pub struct RawProfile {

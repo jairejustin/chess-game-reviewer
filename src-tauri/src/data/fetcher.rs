@@ -57,7 +57,10 @@ async fn fetch_profile(
 
     let raw: RawProfile = client
         .get(&url)
-        .header("User-Agent", "chess-analyzer-app")
+        .header(
+            "User-Agent",
+            "chess-analyzer-app",
+        )
         .send()
         .await
         .map_err(|e| e.to_string())?
@@ -98,7 +101,10 @@ async fn fetch_archives(
 
     let raw: RawArchives = client
         .get(&url)
-        .header("User-Agent", "chess-analyzer-app")
+        .header(
+            "User-Agent",
+            "chess-analyzer-app",
+        )
         .send()
         .await
         .map_err(|e| e.to_string())?
@@ -116,22 +122,29 @@ async fn fetch_month(
 ) -> Result<Vec<RawGame>, String> {
     let response = client
         .get(archive_url)
-        .header("User-Agent", "chess-analyzer-app")
+        .header(
+            "User-Agent",
+            "chess-analyzer-app",
+        )
         .send()
         .await
         .map_err(|e| e.to_string())?;
 
-    let raw: RawMonthlyGames =
-        match response.json::<RawMonthlyGames>().await {
-            Ok(data) => data,
-            Err(_) => return Ok(vec![]),
-        };
+    let raw: RawMonthlyGames = match response
+        .json::<RawMonthlyGames>()
+        .await
+    {
+        Ok(data) => data,
+        Err(_) => return Ok(vec![]),
+    };
 
     Ok(raw.games)
 }
 
 /// Extract and map game pgn and metadata
-fn map_game(raw: &RawGame) -> Option<GameSummary> {
+fn map_game(
+    raw: &RawGame,
+) -> Option<GameSummary> {
     // Skip games without PGN
     let pgn = raw.pgn.clone()?;
 
@@ -148,7 +161,10 @@ fn map_game(raw: &RawGame) -> Option<GameSummary> {
         .unwrap_or("unknown");
 
     let (white_normalized, black_normalized, _) =
-        normalize_result(white_result, black_result);
+        normalize_result(
+            white_result,
+            black_result,
+        );
 
     // Extract game ID from URL last segment
     // e.g. "https://www.chess.com/game/live/12345" -> "12345"
@@ -212,12 +228,14 @@ pub async fn fetch_chesscom_games(
 
     // Determine starting position from cursor
     // or default to the most recent month
-    let mut archive_index =
-        cursor.as_ref().map_or(0, |c| c.archive_index);
+    let mut archive_index = cursor
+        .as_ref()
+        .map_or(0, |c| c.archive_index);
     let mut offset =
         cursor.as_ref().map_or(0, |c| c.offset);
 
-    let mut collected: Vec<GameSummary> = Vec::new();
+    let mut collected: Vec<GameSummary> =
+        Vec::new();
 
     // Archives are oldest-first so we reverse-iterate
     let reversed: Vec<&String> =
@@ -228,16 +246,21 @@ pub async fn fetch_chesscom_games(
     {
         let month_url = reversed[archive_index];
         let raw_games =
-            fetch_month(&client, month_url).await?;
+            fetch_month(&client, month_url)
+                .await?;
 
         // Most recent games are at the end
-        let available: Vec<GameSummary> = raw_games
-            .iter()
-            .rev()
-            .skip(offset)
-            .filter_map(map_game)
-            .take(GAMES_PER_PAGE - collected.len())
-            .collect();
+        let available: Vec<GameSummary> =
+            raw_games
+                .iter()
+                .rev()
+                .skip(offset)
+                .filter_map(map_game)
+                .take(
+                    GAMES_PER_PAGE
+                        - collected.len(),
+                )
+                .collect();
 
         let took = available.len();
         collected.extend(available);
