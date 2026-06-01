@@ -22,6 +22,7 @@ pub struct ChessComCursor {
 #[serde(rename_all = "camelCase")]
 pub struct PlayerProfile {
     pub username: String,
+    pub title: Option<String>,
     pub avatar_url: Option<String>,
     pub country_code: Option<String>,
     pub joined: Option<u64>,
@@ -66,6 +67,7 @@ pub struct FetchResult {
 pub struct RawProfile {
     pub username: String,
     pub avatar: Option<String>,
+    pub title: Option<String>,
     pub country: Option<String>,
     pub joined: Option<u64>,
     pub last_online: Option<u64>,

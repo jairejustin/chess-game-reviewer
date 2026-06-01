@@ -46,7 +46,7 @@ fn normalize_result(
 }
 
 /// Fetch user profile
-async fn fetch_profile(
+pub async fn fetch_profile(
     client: &Client,
     username: &str,
 ) -> Result<PlayerProfile, String> {
@@ -78,6 +78,7 @@ async fn fetch_profile(
 
     Ok(PlayerProfile {
         username: raw.username,
+        title: raw.title,
         avatar_url: raw.avatar,
         country_code,
         joined: raw.joined,

@@ -41,15 +41,15 @@
 
   let destHighlight = 'rgba(155, 199, 0, 0.41)';
   let cgConfig: any = { fen: 'start', viewOnly: true };
+  let opponentProfile: any = null;
 
-  // Helper to load preview from the Rust backend
+  // Helper to load preview moves sequence
   async function loadPreview(pgn: string) {
     try {
       const previewMoves: any[] = await invoke('parse_pgn', { pgn });
 
-      $analysisSummary = null; // Clear any previous analysis state
+      $analysisSummary = null; // Flush out older engine state reports
 
-      // Populate moves with a dummy start position at ply 0
       $moves = [
         {
           ply: 0,
@@ -60,33 +60,44 @@
         ...previewMoves
       ];
 
-      // Jump to the end of the game and switch to the Game tab
       $activePly = $moves.length - 1;
       $sidebarView = 'game';
     } catch (err) {
-      console.error('Failed to parse PGN from backend:', err);
+      console.error('Failed to parse PGN payload from backend:', err);
     }
   }
 
-  // Auto-flip board AND request preview moves when a game is selected
+  // Handle dynamic side re-orientations and trigger background preview fetching
   let processedGameId: string | null = null;
   $: if ($selectedGame && $selectedGame.id !== processedGameId) {
     processedGameId = $selectedGame.id;
 
-    // Auto-flip perspective based on user
     if ($fetchedProfile) {
       const userLower = $fetchedProfile.username.toLowerCase();
       const blackLower = $selectedGame.black.username.toLowerCase();
       $isFlipped = blackLower === userLower;
+
+      // Lazy load opponent data
+      const opponentName = $isFlipped
+        ? $selectedGame.white.username
+        : $selectedGame.black.username;
+      invoke('get_player_profile', { username: opponentName })
+        .then((profile) => {
+          opponentProfile = profile;
+        })
+        .catch((err) => {
+          console.error('Failed to lazy load opponent context profile:', err);
+          opponentProfile = null;
+        });
     } else {
       $isFlipped = false;
+      opponentProfile = null;
     }
 
-    // Trigger the async backend call
     loadPreview($selectedGame.pgn);
   }
 
-  // 1. Resolve raw player metadata
+  // Core Profile Base Metadata Properties Setup
   $: blackName =
     $analysisSummary?.metadata.black ??
     $selectedGame?.black.username ??
@@ -96,6 +107,14 @@
     $selectedGame?.white.username ??
     'Player';
 
+  $: blackTitle = ($fetchedProfile && blackName.toLowerCase() === $fetchedProfile.username.toLowerCase()) 
+    ? $fetchedProfile.title 
+    : opponentProfile?.title;
+
+  $: whiteTitle = ($fetchedProfile && whiteName.toLowerCase() === $fetchedProfile.username.toLowerCase()) 
+    ? $fetchedProfile.title 
+    : opponentProfile?.title;
+
   $: blackRating = $selectedGame?.black.rating ?? null;
   $: whiteRating = $selectedGame?.white.rating ?? null;
 
@@ -103,14 +122,15 @@
     $fetchedProfile &&
     blackName.toLowerCase() === $fetchedProfile.username.toLowerCase()
       ? $fetchedProfile.avatarUrl
-      : null;
+      : opponentProfile?.avatarUrl;
+
   $: whiteAvatar =
     $fetchedProfile &&
     whiteName.toLowerCase() === $fetchedProfile.username.toLowerCase()
       ? $fetchedProfile.avatarUrl
-      : null;
+      : opponentProfile?.avatarUrl;
 
-  // 2. Map data dynamically to Top/Bottom based on $isFlipped state
+  // Map values across layout rows dynamically tracking active $isFlipped configuration
   $: topName = $isFlipped ? whiteName : blackName;
   $: bottomName = $isFlipped ? blackName : whiteName;
 
@@ -132,7 +152,10 @@
     ? material.blackAdvantage
     : material.whiteAdvantage;
 
-  // 3. Update cgConfig reactive block
+  $: topTitle = $isFlipped ? whiteTitle : blackTitle;
+  $: bottomTitle = $isFlipped ? blackTitle : whiteTitle;
+
+  // Update Chessground layout configuration settings engine parameters
   $: {
     const move = $moves[$activePly];
     let autoShapes: any[] = [];
@@ -184,7 +207,7 @@
       await invoke('analyze_game', { pgn });
       $sidebarView = 'game';
     } catch (e) {
-      console.error('Analysis failed:', e);
+      console.error('Analysis runtime tracking breakdown error:', e);
     }
   }
 
@@ -199,6 +222,7 @@
       <div class="grid-top-profile">
         <PlayerProfile
           name={topName}
+          title={topTitle}
           rating={topRating}
           avatarUrl={topAvatar}
           capturedPieces={topCaptured}
@@ -221,6 +245,7 @@
       <div class="grid-bottom-profile">
         <PlayerProfile
           name={bottomName}
+          title={bottomTitle}
           rating={bottomRating}
           avatarUrl={bottomAvatar}
           capturedPieces={bottomCaptured}
@@ -282,7 +307,7 @@
 </main>
 
 <style>
-  /* ── Global ──────────────────────────────────────────────────────── */
+  /* ── Global Styles ────────────────────────────────────────────────── */
   :global(body) {
     background-color: #0f0f11;
     color: #ececec;
@@ -320,7 +345,7 @@
     }
   }
 
-  /* ── Layout ──────────────────────────────────────────────────────── */
+  /* ── Layout Framework ────────────────────────────────────────────── */
   .layout {
     display: flex;
     height: 100vh;
@@ -342,7 +367,7 @@
     min-height: 0;
   }
 
-  /* ── Board Grid Structural Framework ───────────────────────────── */
+  /* ── Board Layout Grid Structural Alignment ─────────────────────── */
   .board-layout-grid {
     display: grid;
     grid-template-columns: max-content max-content;
@@ -396,7 +421,7 @@
     width: 100%;
   }
 
-  /* ── Sidebar Framework ───────────────────────────────────────────── */
+  /* ── Sidebar Component Layout ────────────────────────────────────── */
   .sidebar {
     width: 360px;
     height: 100%;
@@ -420,6 +445,7 @@
     align-items: baseline;
     flex-shrink: 0;
   }
+
   .sidebar__title {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 1.8rem;
@@ -429,13 +455,13 @@
     color: #fff;
   }
 
-  /* ── Nav switcher ────────────────────────────────────────────────── */
   .sidebar__nav {
     display: flex;
     flex-shrink: 0;
     border-bottom: 1px solid #2a2a2e;
     background: #1c1c1f;
   }
+
   .sidebar__nav-btn {
     flex: 1;
     background: transparent;
@@ -454,15 +480,16 @@
       border-color 0.15s ease;
     margin-bottom: -1px;
   }
+
   .sidebar__nav-btn:hover:not(.sidebar__nav-btn--active) {
     color: #888;
   }
+
   .sidebar__nav-btn--active {
     color: #ececec;
     border-bottom-color: #ececec;
   }
 
-  /* ── Game Tab specific ───────────────────────────────────────────── */
   .sidebar__controls {
     padding: 0.2rem;
     background: #1c1c1f;
@@ -488,6 +515,7 @@
     width: 100%;
     margin-top: 0.75rem;
   }
+
   .analyze-preview-btn:hover {
     background: #234737;
     border-color: #3b7359;

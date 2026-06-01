@@ -3,6 +3,7 @@
 
   export let name: string = 'Player';
   export let rating: number | null = null;
+  export let title: string | null = null;
   export let avatarUrl: string | null = null;
   export let capturedPieces: string[] = [];
   export let advantage: number = 0;
@@ -16,6 +17,9 @@
   </div>
   <div class="player-profile__info">
     <span class="player-profile__name">
+      {#if title}
+        <span class="player-profile__title">{title}</span>
+      {/if}
       {name}{rating ? ` (${rating})` : ''}
     </span>
     <MaterialStrip {capturedPieces} {advantage} />
@@ -63,6 +67,21 @@
     font-weight: 700;
     font-size: 1rem;
     color: #ececec;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .player-profile__title {
+    background: #b33430;
+    color: #fff;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 800;
+    font-size: 0.7rem;
+    padding: 2px 5px;
+    border-radius: 4px;
+    text-transform: uppercase;
     line-height: 1;
   }
 </style>

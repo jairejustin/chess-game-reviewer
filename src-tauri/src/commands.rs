@@ -1,16 +1,20 @@
-use crate::data::fetcher::fetch_chesscom_games;
+use crate::data::fetcher::{
+    fetch_chesscom_games, fetch_profile,
+};
 use crate::models::fetch::{
-    ChessComCursor, FetchResult,
+    ChessComCursor, FetchResult, PlayerProfile,
 };
 use crate::pipeline::analyzer::run_analysis_pipeline;
 
+use crate::data::pgn::PgnVisitor;
 #[allow(unused_imports)]
 use crate::models::game::{
     AnalysisProgress, AnalysisSummary,
     AnalyzedMove, GameMetadata, MoveBadge,
     MoveCounts,
 };
-
+use pgn_reader::Reader;
+use std::io::Cursor;
 use tauri::{AppHandle, Emitter};
 
 #[tauri::command]
@@ -57,6 +61,14 @@ pub async fn fetch_games(
     }
 }
 
+#[tauri::command]
+pub async fn get_player_profile(
+    username: String,
+) -> Result<PlayerProfile, String> {
+    let client = reqwest::Client::new();
+    fetch_profile(&client, &username).await
+}
+
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PreviewMove {
@@ -67,17 +79,21 @@ pub struct PreviewMove {
 }
 
 #[tauri::command]
-pub fn parse_pgn(pgn: String) -> Result<Vec<PreviewMove>, String> {
-    use pgn_reader::Reader;
-    use crate::data::pgn::PgnVisitor;
-    use std::io::Cursor;
-
+pub fn parse_pgn(
+    pgn: String,
+) -> Result<Vec<PreviewMove>, String> {
     let mut visitor = PgnVisitor::new();
-    let mut reader = Reader::new(Cursor::new(pgn.as_bytes()));
+    let mut reader =
+        Reader::new(Cursor::new(pgn.as_bytes()));
 
-    let (_metadata, positions) = match reader.read_game(&mut visitor) {
+    let (_metadata, positions) = match reader
+        .read_game(&mut visitor)
+    {
         Ok(Some(p)) => p,
-        _ => return Err("Failed to parse PGN game structure".to_string()),
+        _ => return Err(
+            "Failed to parse PGN game structure"
+                .to_string(),
+        ),
     };
 
     let preview_moves = positions

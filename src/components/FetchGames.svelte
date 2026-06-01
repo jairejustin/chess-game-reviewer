@@ -33,7 +33,6 @@
   function formatTimeClass(tc: string): string {
     return tc.charAt(0).toUpperCase() + tc.slice(1);
   }
-
 </script>
 
 <div class="fetch-games">
@@ -98,18 +97,13 @@
         {/if}
       </div>
       <div class="profile-strip__info">
+        {#if $fetchedProfile.title}
+          <span class="player-title">{$fetchedProfile.title}</span>
+        {/if}
         <span class="profile-strip__name">{$fetchedProfile.username}</span>
         <div class="profile-strip__meta">
           {#if $fetchedProfile.countryCode}
             <span class="profile-strip__tag">{$fetchedProfile.countryCode}</span
-            >
-          {/if}
-          {#if $fetchedProfile.fide}
-            <span class="profile-strip__tag">FIDE {$fetchedProfile.fide}</span>
-          {/if}
-          {#if $fetchedProfile.followers}
-            <span class="profile-strip__tag"
-              >{$fetchedProfile.followers.toLocaleString()} followers</span
             >
           {/if}
         </div>
@@ -438,5 +432,15 @@
     opacity: 0.4;
     cursor: not-allowed;
   }
-
+  .player-title {
+    background: #b33430;
+    color: #fff;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 800;
+    font-size: 0.7rem;
+    padding: 1px 4px;
+    border-radius: 4px;
+    line-height: 1;
+    text-transform: uppercase;
+  }
 </style>

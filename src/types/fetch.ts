@@ -7,6 +7,7 @@ export interface ChessComCursor {
 
 export interface PlayerProfile {
   username: string;
+  title: string | null;
   avatarUrl: string | null;
   countryCode: string | null;
   joined: number | null;
