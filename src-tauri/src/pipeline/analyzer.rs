@@ -4,7 +4,8 @@ use crate::heuristics::classify::{
     classify, ClassifyArgs,
 };
 use crate::heuristics::see::{
-    get_target_square, is_losing_material,
+    get_target_square,
+    is_losing_significant_material, is_sacrifice,
 };
 
 use crate::data::pgn::PgnVisitor;
@@ -598,7 +599,7 @@ fn evaluate_move_context(
         .unwrap_or(class_prev_eval);
 
     // Parsed board state before the move.
-    // Is used to get forced moves, legal moves, and book lookups.
+    // Is used to check for sacrifices, forced moves, legal moves, and book lookups.
     let prev_pos =
         Fen::from_ascii(prev_fen.as_bytes())
             .ok()
@@ -610,7 +611,7 @@ fn evaluate_move_context(
             });
 
     // Parsed board state after the move.
-    // Is used to check for sacrifices.
+    // Is used to check for hanging pieces.
     let current_pos_opt =
         Fen::from_ascii(fen.as_bytes())
             .ok()
@@ -627,18 +628,32 @@ fn evaluate_move_context(
         .map(|pos| pos.legal_moves().len() == 1)
         .unwrap_or(false);
 
+    let played_move =
+        prev_pos.as_ref().and_then(|pos| {
+            San::from_ascii(san.as_bytes())
+                .ok()
+                .and_then(|s| s.to_move(pos).ok())
+        });
+
     // Checks if the move is a sacrifice
-    let is_losing_material_flag =
-        if let Some(ref pos) = current_pos_opt {
+    let is_losing_material_flag = match (
+        prev_pos.as_ref(),
+        current_pos_opt.as_ref(),
+        played_move.as_ref(),
+    ) {
+        (Some(prev), Some(current), Some(mv)) => {
             let color = if ply_count % 2 != 0 {
                 shakmaty::Color::White
             } else {
                 shakmaty::Color::Black
             };
-            is_losing_material(pos, color)
-        } else {
-            false
-        };
+            is_sacrifice(prev, mv)
+                && is_losing_significant_material(
+                    current, color,
+                )
+        }
+        _ => false,
+    };
 
     let prev_target = get_target_square(prev_san);
     let current_target = get_target_square(san);

@@ -94,7 +94,7 @@ pub fn legal_see(
 //
 // SEE >= 2: A value of 1 usually means an even pawn trade. A loss of 2 or more indicates
 // a true piece loss (e.g., losing a Knight (3) to a Pawn (1) results in a net loss of 2).
-pub fn is_losing_material(
+pub fn is_losing_significant_material(
     current_pos: &Chess,
     color: Color,
 ) -> bool {
@@ -109,4 +109,20 @@ pub fn is_losing_material(
         }
     }
     false
+}
+
+/// Checks if the played move is a sacrifice, meaning the player deliberately moved a piece
+/// to a square where the opponent can profitably capture it (net loss >= 2 points).
+///
+/// This must be evaluated on the pre-move board because SEE internally simulates
+/// the capture sequence starting from the destination square.
+/// Its a different check from the function above.
+/// The function above answers: Did the move leave anything else on the board undefended?
+/// This function answeres the question: Did the player voluntarily land on a dangerous square?
+pub fn is_sacrifice(
+    pre_move_pos: &Chess,
+    played_move: &Move,
+) -> bool {
+    let target_sq = played_move.to();
+    legal_see(pre_move_pos, target_sq) >= 2
 }
