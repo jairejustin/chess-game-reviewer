@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { moves, activePly } from '../store/gameStore';
+  import { moves, activePly, isFlipped } from '../store/gameStore';
   import ChevronLeft from 'lucide-svelte/icons/chevron-left';
   import ChevronRight from 'lucide-svelte/icons/chevron-right';
+  import ArrowUpDown from 'lucide-svelte/icons/arrow-up-down';
 
   $: canGoBack = $activePly > 0;
   $: canGoForward = $activePly < $moves.length - 1;
@@ -12,16 +13,27 @@
   function goForward() {
     if (canGoForward) activePly.update((p) => p + 1);
   }
+  function toggleFlip() {
+    $isFlipped = !$isFlipped;
+  }
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'ArrowLeft') goBack();
     if (e.key === 'ArrowRight') goForward();
+    if (e.key.toLowerCase() === 'f') toggleFlip();
   }
 </script>
 
 <svelte:window on:keydown={handleKeydown} />
 
 <div class="controls">
+  <button
+    class="controls__btn controls__btn--icon"
+    on:click={toggleFlip}
+    title="Flip board (F)"
+  >
+    <ArrowUpDown size={22} strokeWidth={3} />
+  </button>
   <button
     class="controls__btn controls__btn--icon"
     on:click={goBack}

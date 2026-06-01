@@ -1,20 +1,25 @@
 <script lang="ts">
-  import { currentEval, currentMateIn } from '../store/gameStore';
+  import {
+    currentEval,
+    currentMateIn,
+    isFlipped,
+    analysisSummary
+  } from '../store/gameStore';
   import { formatEval } from '../utils/ui';
 
   function winPercent(cp: number): number {
     return 50 + 50 * (2 / (1 + Math.exp(-0.00368 * cp)) - 1);
   }
 
-  $: whitePercent = winPercent($currentEval);
+  $: whitePercent = $analysisSummary ? winPercent($currentEval ?? 0) : 50;
   $: blackPercent = 100 - whitePercent;
+  $: displayEval = $analysisSummary
+    ? formatEval($currentEval ?? 0, $currentMateIn)
+    : '0.00';
 </script>
 
-<div
-  class="eval-bar"
-  aria-label="Evaluation bar, {formatEval($currentEval, $currentMateIn)}"
->
-  <div class="eval-bar__track">
+<div class="eval-bar" aria-label="Evaluation bar, {displayEval}">
+  <div class="eval-bar__track" class:eval-bar__track--flipped={$isFlipped}>
     <div
       class="eval-bar__segment eval-bar__segment--black"
       style="flex: {blackPercent}"
@@ -28,10 +33,10 @@
 
   <span
     class="eval-bar__label"
-    class:eval-bar__label--winning={$currentEval > 0}
-    class:eval-bar__label--losing={$currentEval < 0}
+    class:eval-bar__label--winning={$analysisSummary && ($currentEval ?? 0) > 0}
+    class:eval-bar__label--losing={$analysisSummary && ($currentEval ?? 0) < 0}
   >
-    {formatEval($currentEval, $currentMateIn)}
+    {$analysisSummary ? displayEval : '-'}
   </span>
 </div>
 
@@ -88,5 +93,8 @@
   }
   .eval-bar__label--losing {
     color: #e06060;
+  }
+  .eval-bar__track--flipped {
+    flex-direction: column-reverse;
   }
 </style>

@@ -14,6 +14,7 @@ export const isAnalyzing = writable<boolean>(false);
 export const analysisSummary = writable<AnalysisSummary | null>(null);
 export const loadingProgress = writable<number>(0);
 export const sidebarView = writable<SidebarView>('import');
+export const isFlipped = writable<boolean>(false);
 
 export const currentFen = derived(
   [moves, activePly],
