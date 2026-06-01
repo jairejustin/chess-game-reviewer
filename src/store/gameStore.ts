@@ -1,5 +1,9 @@
 import { writable, derived } from 'svelte/store';
-import type { AnalyzedMove, AnalysisSummary, AnalysisProgress } from '../types/game';
+import type {
+  AnalyzedMove,
+  AnalysisSummary,
+  AnalysisProgress
+} from '../types/game';
 import { listen } from '@tauri-apps/api/event';
 
 export type SidebarView = 'import' | 'game' | 'summary';
@@ -58,11 +62,11 @@ export async function initTauriListeners() {
     isAnalyzing.set(false);
     analysisSummary.set(event.payload);
     moves.set(event.payload.moves);
-    
+
     if (event.payload.moves.length > 0) {
-        activePly.set(event.payload.moves.length - 1);
+      activePly.set(event.payload.moves.length - 1);
     }
-    
+
     loadingProgress.set(1);
     sidebarView.set('summary');
   });

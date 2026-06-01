@@ -1,5 +1,4 @@
 <script lang="ts">
-  // Added activePly and sidebarView imports here
   import { analysisSummary, activePly, sidebarView } from '../store/gameStore';
   import { tallyLabels, formatAccuracy, activeTallyRows } from '../utils/ui';
   import Badge from './Badge.svelte';
@@ -84,9 +83,7 @@
       </div>
     </div>
 
-    <button class="review-btn" on:click={startReview}>
-      Start Review
-    </button>
+    <button class="review-btn" on:click={startReview}> Start Review </button>
   {/if}
 </div>
 
@@ -244,7 +241,6 @@
     color: #888;
   }
 
-  /* NEW: Review Button Styles */
   .review-btn {
     background: #1b382b;
     border: 1px solid #2b5743;
@@ -262,7 +258,7 @@
     align-items: center;
     justify-content: center;
   }
-  
+
   .review-btn:hover {
     background: #234737;
     border-color: #3b7359;

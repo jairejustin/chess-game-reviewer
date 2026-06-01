@@ -10,7 +10,9 @@
     isAnalyzing,
     loadingProgress,
     sidebarView,
+    analysisSummary,
   } from '../store/gameStore';
+  import { selectedGame, fetchedProfile } from '../store/fetchStore';
   import { getInBoardBadge, badgeColors } from '../utils/boardBadges';
 
   import EvalBar from '../components/EvalBar.svelte';
@@ -18,6 +20,7 @@
   import EngineFeedback from '../components/EngineFeedback.svelte';
   import MoveList from '../components/MoveList.svelte';
   import GameSummary from '../components/GameSummary.svelte';
+  import FetchGames from '../components/FetchGames.svelte';
 
   import Cpu from 'lucide-svelte/icons/cpu';
   import Loader2 from 'lucide-svelte/icons/loader-2';
@@ -36,14 +39,29 @@
   $: material = calculateMaterial($currentFen || 'start');
 
   let destHighlight = 'rgba(155, 199, 0, 0.41)';
-
   let cgConfig: any = { fen: 'start', viewOnly: true };
+
+  // Board profile — prefer analysis metadata once complete, 
+  // fall back to selected game, then placeholder
+  $: topPlayer = $analysisSummary?.metadata.black
+    ?? $selectedGame?.black.username
+    ?? 'Opponent';
+
+  $: bottomPlayer = $analysisSummary?.metadata.white
+    ?? $selectedGame?.white.username
+    ?? 'Player';
+
+  $: topRating = $selectedGame?.black.rating ?? null;
+  $: bottomRating = $selectedGame?.white.rating ?? null;
+
+  $: topAvatar = $fetchedProfile?.avatarUrl ?? null;
+  $: bottomAvatar = $fetchedProfile?.avatarUrl ?? null;
 
   $: {
     const move = $moves[$activePly];
-    let autoShapes = [];
+    let autoShapes: any[] = [];
     let lastMove: string[] = [];
-    destHighlight = 'rgba(155, 199, 0, 0.41)'; // Reset on ply change
+    destHighlight = 'rgba(155, 199, 0, 0.41)';
 
     if (
       move &&
@@ -71,12 +89,7 @@
       lastMove,
       drawable: {
         brushes: {
-          invisible: {
-            key: 'i',
-            color: 'transparent',
-            opacity: 0,
-            lineWidth: 1
-          }
+          invisible: { key: 'i', color: 'transparent', opacity: 0, lineWidth: 1 }
         },
         autoShapes,
         visible: true
@@ -84,11 +97,10 @@
     };
   }
 
-  async function runAnalysis() {
-    const pgn = `[Event "Test"]\n[White "Player1"]\n[Black "Player2"]\n[Result "1-0"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. b4 Bxb4 5. c3 Ba5 6. d4 exd4 7. O-O d3 8. Qb3 Qf6 9. e5 Qg6 10. Re1 Nge7 11. Ba3 b5 12. Qxb5 Rb8 13. Qa4 Bb6 14. Nbd2 Bb7 15. Ne4 Qf5 16. Bxd3 Qh5 17. Nf6+ gxf6 18. exf6 Rg8 19. Rad1 Qxf3 20. Rxe7+ Nxe7 21. Qxd7+ Kxd7 22. Bf5+ Ke8 23. Bd7+ Kf8 24. Bxe7# 1-0`;
+  async function runAnalysis(pgn: string) {
     try {
       await invoke('analyze_game', { pgn });
-      $sidebarView = 'game'; // Switch to game view automatically when analysis starts
+      $sidebarView = 'game';
     } catch (e) {
       console.error('Analysis failed:', e);
     }
@@ -105,12 +117,14 @@
       <div class="grid-top-profile player-profile">
         <div class="player-profile__avatar">
           <img
-            src="https://ui-avatars.com/api/?name=Opponent&background=232326&color=ececec"
-            alt="Opponent Avatar"
+            src={topAvatar ?? `https://ui-avatars.com/api/?name=${topPlayer}&background=232326&color=ececec`}
+            alt={topPlayer}
           />
         </div>
         <div class="player-profile__info">
-          <span class="player-profile__name">Opponent</span>
+          <span class="player-profile__name">
+            {topPlayer}{topRating ? ` (${topRating})` : ''}
+          </span>
           <MaterialStrip
             capturedPieces={material.blackCaptured}
             advantage={material.blackAdvantage}
@@ -118,9 +132,7 @@
         </div>
       </div>
 
-      <div class="grid-eval">
-        <EvalBar />
-      </div>
+      <div class="grid-eval"><EvalBar /></div>
 
       <div class="grid-board">
         <div class="board-frame">
@@ -135,12 +147,14 @@
       <div class="grid-bottom-profile player-profile">
         <div class="player-profile__avatar">
           <img
-            src="https://ui-avatars.com/api/?name=Player&background=232326&color=ececec"
-            alt="Player Avatar"
+            src={bottomAvatar ?? `https://ui-avatars.com/api/?name=${bottomPlayer}&background=232326&color=ececec`}
+            alt={bottomPlayer}
           />
         </div>
         <div class="player-profile__info">
-          <span class="player-profile__name">Player</span>
+          <span class="player-profile__name">
+            {bottomPlayer}{bottomRating ? ` (${bottomRating})` : ''}
+          </span>
           <MaterialStrip
             capturedPieces={material.whiteCaptured}
             advantage={material.whiteAdvantage}
@@ -160,60 +174,21 @@
         class="sidebar__nav-btn"
         class:sidebar__nav-btn--active={$sidebarView === 'import'}
         on:click={() => ($sidebarView = 'import')}
-      >
-        Import
-      </button>
+      >Import</button>
       <button
         class="sidebar__nav-btn"
         class:sidebar__nav-btn--active={$sidebarView === 'game'}
         on:click={() => ($sidebarView = 'game')}
-      >
-        Game
-      </button>
+      >Game</button>
       <button
         class="sidebar__nav-btn"
         class:sidebar__nav-btn--active={$sidebarView === 'summary'}
         on:click={() => ($sidebarView = 'summary')}
-      >
-        Summary
-      </button>
+      >Summary</button>
     </div>
 
     {#if $sidebarView === 'import'}
-      <div class="import-tab">
-        <h3 class="import-tab__title">Fetch Online Games</h3>
-        <p class="import-tab__desc">
-          Connect your account to analyze recent games from Lichess or
-          Chess.com.
-        </p>
-
-        <div class="import-tab__form">
-          <input
-            type="text"
-            class="import-tab__input"
-            placeholder="Lichess Username"
-            disabled
-          />
-          <button class="import-tab__btn" disabled>Fetch Games</button>
-        </div>
-
-        <div class="import-tab__divider"><span>OR</span></div>
-
-        <p class="import-tab__desc">
-          Run an engine analysis on the hardcoded test PGN:
-        </p>
-        <button
-          class="analyze-btn"
-          on:click={runAnalysis}
-          disabled={$isAnalyzing}
-        >
-          {#if $isAnalyzing}
-            <Loader2 size={20} class="spin" strokeWidth={3} /> Analyzing…
-          {:else}
-            <Cpu size={20} strokeWidth={3} /> Run Analysis
-          {/if}
-        </button>
-      </div>
+      <FetchGames onAnalyze={runAnalysis} />
     {:else if $sidebarView === 'game'}
       {#if $isAnalyzing}
         <div class="loading-overlay">
@@ -222,7 +197,6 @@
           </div>
           <h3 class="loading-overlay__title">Analyzing...</h3>
           <p class="loading-overlay__desc">The engine is evaluating</p>
-          
           <div class="progress-track">
             <div class="progress-fill" style="width: {$loadingProgress * 100}%"></div>
           </div>
