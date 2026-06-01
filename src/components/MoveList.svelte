@@ -49,12 +49,14 @@
           </span>
         </div>
         <div class="move-list__meta">
-          <span class="move-list__eval"
-            >{formatEval(move.playedEval, move.mateIn)}</span
-          >
-          <div title={move.classification}>
-            <Badge classification={move.classification} size={26} />
-          </div>
+          {#if move.classification}
+            <span class="move-list__eval">
+              {formatEval(move.playedEval ?? 0, move.mateIn)}
+            </span>
+            <div title={move.classification}>
+              <Badge classification={move.classification} size={26} />
+            </div>
+          {/if}
         </div>
       </button>
     {/each}

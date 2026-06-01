@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
+  import Cpu from 'lucide-svelte/icons/cpu';
+
   import { chessground } from '../actions/chessground';
   import {
     moves,
@@ -11,6 +13,7 @@
     loadingProgress,
     sidebarView,
     analysisSummary,
+    isFlipped
   } from '../store/gameStore';
   import { selectedGame, fetchedProfile } from '../store/fetchStore';
   import { getInBoardBadge, badgeColors } from '../utils/boardBadges';
@@ -21,42 +24,115 @@
   import MoveList from '../components/MoveList.svelte';
   import GameSummary from '../components/GameSummary.svelte';
   import FetchGames from '../components/FetchGames.svelte';
-
-  import Cpu from 'lucide-svelte/icons/cpu';
-  import Loader2 from 'lucide-svelte/icons/loader-2';
+  import PlayerProfile from '../components/PlayerProfile.svelte';
+  import AnalysisLoading from '../components/AnalysisLoading.svelte';
 
   import '@lichess-org/chessground/assets/chessground.base.css';
   import '@lichess-org/chessground/assets/chessground.brown.css';
   import '@lichess-org/chessground/assets/chessground.cburnett.css';
+
   // @ts-ignore
   import '@fontsource/bebas-neue';
   // @ts-ignore
   import '@fontsource-variable/outfit';
 
   import { calculateMaterial } from '../utils/material';
-  import MaterialStrip from '../components/MaterialStrip.svelte';
-
   $: material = calculateMaterial($currentFen || 'start');
 
   let destHighlight = 'rgba(155, 199, 0, 0.41)';
   let cgConfig: any = { fen: 'start', viewOnly: true };
 
-  // Board profile — prefer analysis metadata once complete, 
-  // fall back to selected game, then placeholder
-  $: topPlayer = $analysisSummary?.metadata.black
-    ?? $selectedGame?.black.username
-    ?? 'Opponent';
+  // Helper to load preview from the Rust backend
+  async function loadPreview(pgn: string) {
+    try {
+      const previewMoves: any[] = await invoke('parse_pgn', { pgn });
 
-  $: bottomPlayer = $analysisSummary?.metadata.white
-    ?? $selectedGame?.white.username
-    ?? 'Player';
+      $analysisSummary = null; // Clear any previous analysis state
 
-  $: topRating = $selectedGame?.black.rating ?? null;
-  $: bottomRating = $selectedGame?.white.rating ?? null;
+      // Populate moves with a dummy start position at ply 0
+      $moves = [
+        {
+          ply: 0,
+          san: '',
+          fen: 'start',
+          uci: ''
+        },
+        ...previewMoves
+      ];
 
-  $: topAvatar = $fetchedProfile?.avatarUrl ?? null;
-  $: bottomAvatar = $fetchedProfile?.avatarUrl ?? null;
+      // Jump to the end of the game and switch to the Game tab
+      $activePly = $moves.length - 1;
+      $sidebarView = 'game';
+    } catch (err) {
+      console.error('Failed to parse PGN from backend:', err);
+    }
+  }
 
+  // Auto-flip board AND request preview moves when a game is selected
+  let processedGameId: string | null = null;
+  $: if ($selectedGame && $selectedGame.id !== processedGameId) {
+    processedGameId = $selectedGame.id;
+
+    // Auto-flip perspective based on user
+    if ($fetchedProfile) {
+      const userLower = $fetchedProfile.username.toLowerCase();
+      const blackLower = $selectedGame.black.username.toLowerCase();
+      $isFlipped = blackLower === userLower;
+    } else {
+      $isFlipped = false;
+    }
+
+    // Trigger the async backend call
+    loadPreview($selectedGame.pgn);
+  }
+
+  // 1. Resolve raw player metadata
+  $: blackName =
+    $analysisSummary?.metadata.black ??
+    $selectedGame?.black.username ??
+    'Opponent';
+  $: whiteName =
+    $analysisSummary?.metadata.white ??
+    $selectedGame?.white.username ??
+    'Player';
+
+  $: blackRating = $selectedGame?.black.rating ?? null;
+  $: whiteRating = $selectedGame?.white.rating ?? null;
+
+  $: blackAvatar =
+    $fetchedProfile &&
+    blackName.toLowerCase() === $fetchedProfile.username.toLowerCase()
+      ? $fetchedProfile.avatarUrl
+      : null;
+  $: whiteAvatar =
+    $fetchedProfile &&
+    whiteName.toLowerCase() === $fetchedProfile.username.toLowerCase()
+      ? $fetchedProfile.avatarUrl
+      : null;
+
+  // 2. Map data dynamically to Top/Bottom based on $isFlipped state
+  $: topName = $isFlipped ? whiteName : blackName;
+  $: bottomName = $isFlipped ? blackName : whiteName;
+
+  $: topRating = $isFlipped ? whiteRating : blackRating;
+  $: bottomRating = $isFlipped ? blackRating : whiteRating;
+
+  $: topAvatar = $isFlipped ? whiteAvatar : blackAvatar;
+  $: bottomAvatar = $isFlipped ? blackAvatar : whiteAvatar;
+
+  $: topCaptured = $isFlipped ? material.whiteCaptured : material.blackCaptured;
+  $: bottomCaptured = $isFlipped
+    ? material.blackCaptured
+    : material.whiteCaptured;
+
+  $: topAdvantage = $isFlipped
+    ? material.whiteAdvantage
+    : material.blackAdvantage;
+  $: bottomAdvantage = $isFlipped
+    ? material.blackAdvantage
+    : material.whiteAdvantage;
+
+  // 3. Update cgConfig reactive block
   $: {
     const move = $moves[$activePly];
     let autoShapes: any[] = [];
@@ -85,11 +161,17 @@
 
     cgConfig = {
       fen: $currentFen || 'start',
+      orientation: $isFlipped ? 'black' : 'white',
       viewOnly: true,
       lastMove,
       drawable: {
         brushes: {
-          invisible: { key: 'i', color: 'transparent', opacity: 0, lineWidth: 1 }
+          invisible: {
+            key: 'i',
+            color: 'transparent',
+            opacity: 0,
+            lineWidth: 1
+          }
         },
         autoShapes,
         visible: true
@@ -114,22 +196,14 @@
 <main class="layout">
   <section class="layout__board">
     <div class="board-layout-grid">
-      <div class="grid-top-profile player-profile">
-        <div class="player-profile__avatar">
-          <img
-            src={topAvatar ?? `https://ui-avatars.com/api/?name=${topPlayer}&background=232326&color=ececec`}
-            alt={topPlayer}
-          />
-        </div>
-        <div class="player-profile__info">
-          <span class="player-profile__name">
-            {topPlayer}{topRating ? ` (${topRating})` : ''}
-          </span>
-          <MaterialStrip
-            capturedPieces={material.blackCaptured}
-            advantage={material.blackAdvantage}
-          />
-        </div>
+      <div class="grid-top-profile">
+        <PlayerProfile
+          name={topName}
+          rating={topRating}
+          avatarUrl={topAvatar}
+          capturedPieces={topCaptured}
+          advantage={topAdvantage}
+        />
       </div>
 
       <div class="grid-eval"><EvalBar /></div>
@@ -144,22 +218,14 @@
         </div>
       </div>
 
-      <div class="grid-bottom-profile player-profile">
-        <div class="player-profile__avatar">
-          <img
-            src={bottomAvatar ?? `https://ui-avatars.com/api/?name=${bottomPlayer}&background=232326&color=ececec`}
-            alt={bottomPlayer}
-          />
-        </div>
-        <div class="player-profile__info">
-          <span class="player-profile__name">
-            {bottomPlayer}{bottomRating ? ` (${bottomRating})` : ''}
-          </span>
-          <MaterialStrip
-            capturedPieces={material.whiteCaptured}
-            advantage={material.whiteAdvantage}
-          />
-        </div>
+      <div class="grid-bottom-profile">
+        <PlayerProfile
+          name={bottomName}
+          rating={bottomRating}
+          avatarUrl={bottomAvatar}
+          capturedPieces={bottomCaptured}
+          advantage={bottomAdvantage}
+        />
       </div>
     </div>
   </section>
@@ -173,40 +239,40 @@
       <button
         class="sidebar__nav-btn"
         class:sidebar__nav-btn--active={$sidebarView === 'import'}
-        on:click={() => ($sidebarView = 'import')}
-      >Import</button>
+        on:click={() => ($sidebarView = 'import')}>Import</button
+      >
       <button
         class="sidebar__nav-btn"
         class:sidebar__nav-btn--active={$sidebarView === 'game'}
-        on:click={() => ($sidebarView = 'game')}
-      >Game</button>
+        on:click={() => ($sidebarView = 'game')}>Game</button
+      >
       <button
         class="sidebar__nav-btn"
         class:sidebar__nav-btn--active={$sidebarView === 'summary'}
-        on:click={() => ($sidebarView = 'summary')}
-      >Summary</button>
+        on:click={() => ($sidebarView = 'summary')}>Summary</button
+      >
     </div>
 
     {#if $sidebarView === 'import'}
-      <FetchGames onAnalyze={runAnalysis} />
+      <FetchGames />
     {:else if $sidebarView === 'game'}
       {#if $isAnalyzing}
-        <div class="loading-overlay">
-          <div class="loading-overlay__icon-wrapper">
-            <Loader2 size={48} class="spin" strokeWidth={2} />
-          </div>
-          <h3 class="loading-overlay__title">Analyzing...</h3>
-          <p class="loading-overlay__desc">The engine is evaluating</p>
-          <div class="progress-track">
-            <div class="progress-fill" style="width: {$loadingProgress * 100}%"></div>
-          </div>
-          <span class="progress-text">{Math.round($loadingProgress * 100)}%</span>
-        </div>
+        <AnalysisLoading progress={$loadingProgress} />
       {:else}
         <EngineFeedback />
         <MoveList />
         <div class="sidebar__controls">
           <BoardControls />
+
+          {#if !$analysisSummary && $selectedGame}
+            <button
+              class="analyze-preview-btn"
+              on:click={() => runAnalysis($selectedGame!.pgn)}
+            >
+              <Cpu size={18} strokeWidth={3} />
+              Analyze Game
+            </button>
+          {/if}
         </div>
       {/if}
     {:else if $sidebarView === 'summary'}
@@ -271,7 +337,7 @@
     flex: 1;
     display: flex;
     justify-content: center;
-    align-items: flex-start; /* Aligns contents flush with the top */
+    align-items: flex-start;
     height: 100%;
     min-height: 0;
   }
@@ -281,7 +347,7 @@
     display: grid;
     grid-template-columns: max-content max-content;
     grid-template-rows: max-content minmax(0, 1fr) max-content;
-    gap: 0 16px; /* 16px gap between eval bar and board */
+    gap: 0 16px;
     height: 100%;
     max-height: 100%;
   }
@@ -290,6 +356,7 @@
     grid-column: 2;
     grid-row: 1;
     margin-bottom: 8px;
+    width: 100%;
   }
 
   .grid-eval {
@@ -307,7 +374,7 @@
 
   .board-frame {
     height: 100%;
-    aspect-ratio: 1 / 1; /* Retains perfect square based on height */
+    aspect-ratio: 1 / 1;
     position: relative;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
     border-radius: 4px;
@@ -322,59 +389,18 @@
     user-select: none;
   }
 
-  /* ── Player Profiles ─────────────────────────────────────────────── */
   .grid-bottom-profile {
     grid-column: 2;
     grid-row: 3;
     margin-top: 8px;
-  }
-
-  .player-profile {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    height: 40px;
-    padding: 0 2px;
-    width: 100%; /* Will exactly match the dynamic board width */
-    box-sizing: border-box;
-    flex-shrink: 0;
-  }
-
-  .player-profile__avatar {
-    width: 3rem;
-    height: 3rem;
-    border-radius: 6px;
-    overflow: hidden;
-    background: #232326;
-    flex-shrink: 0;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  }
-
-  .player-profile__avatar img {
     width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-  }
-
-  .player-profile__info {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 2px;
-    min-width: 0;
-  }
-
-  .player-profile__name {
-    font-weight: 700;
-    font-size: 1rem;
-    color: #ececec;
-    line-height: 1;
   }
 
   /* ── Sidebar Framework ───────────────────────────────────────────── */
   .sidebar {
     width: 360px;
+    height: 100%;
+    max-height: 100%;
     flex-shrink: 0;
     background: #161618;
     border: 1px solid #2a2a2e;
@@ -384,6 +410,7 @@
     overflow: hidden;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
   }
+
   .sidebar__header {
     padding: 1.1rem 1.25rem 1rem;
     background: #1c1c1f;
@@ -443,77 +470,7 @@
     flex-shrink: 0;
   }
 
-  /* ── Import Tab specific ─────────────────────────────────────────── */
-  .import-tab {
-    padding: 1.5rem 1.25rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    flex: 1;
-    overflow-y: auto;
-  }
-  .import-tab__title {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 1.3rem;
-    letter-spacing: 1px;
-    color: #ececec;
-    margin: 0;
-  }
-  .import-tab__desc {
-    font-size: 0.9rem;
-    color: #888;
-    margin: 0;
-    line-height: 1.4;
-  }
-  .import-tab__form {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
-  }
-  .import-tab__input {
-    background: #111;
-    border: 1px solid #333;
-    padding: 0.8rem;
-    border-radius: 6px;
-    color: #ececec;
-    font-family: 'Outfit', sans-serif;
-    outline: none;
-    transition: border-color 0.2s;
-  }
-  .import-tab__input:focus {
-    border-color: #555;
-  }
-  .import-tab__btn {
-    background: #232326;
-    color: #fff;
-    border: 1px solid #333;
-    padding: 0.8rem;
-    border-radius: 6px;
-    cursor: not-allowed;
-    font-family: 'Outfit', sans-serif;
-    font-weight: 600;
-    opacity: 0.5;
-  }
-  .import-tab__divider {
-    display: flex;
-    align-items: center;
-    text-align: center;
-    color: #555;
-    font-size: 0.8rem;
-    font-weight: 600;
-    margin: 1rem 0;
-  }
-  .import-tab__divider::before,
-  .import-tab__divider::after {
-    content: '';
-    flex: 1;
-    border-bottom: 1px solid #2a2a2e;
-  }
-  .import-tab__divider span {
-    padding: 0 10px;
-  }
-  .analyze-btn {
+  .analyze-preview-btn {
     background: #1b382b;
     border: 1px solid #2b5743;
     color: #8be1b4;
@@ -529,66 +486,10 @@
     justify-content: center;
     gap: 0.5rem;
     width: 100%;
-    margin-top: 0.5rem;
+    margin-top: 0.75rem;
   }
-  .analyze-btn:hover:not(:disabled) {
+  .analyze-preview-btn:hover {
     background: #234737;
     border-color: #3b7359;
-  }
-  .analyze-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-  /* ── Loading Overlay ─────────────────────────────────────────────── */
-  .loading-overlay {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 2rem;
-    text-align: center;
-  }
-  
-  .loading-overlay__icon-wrapper {
-    color: #8be1b4;
-    margin-bottom: 2rem;
-  }
-  
-  .loading-overlay__title {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 1.5rem;
-    letter-spacing: 1px;
-    color: #ececec;
-    margin: 0 0 0.5rem 0;
-  }
-  
-  .loading-overlay__desc {
-    font-size: 0.9rem;
-    color: #888;
-    margin: 0 0 2rem 0;
-  }
-  
-  .progress-track {
-    width: 80%;
-    height: 6px;
-    background: #111;
-    border: 1px solid #333;
-    border-radius: 4px;
-    overflow: hidden;
-    margin-bottom: 0.5rem;
-  }
-  
-  .progress-fill {
-    height: 100%;
-    background: #8be1b4;
-    transition: width 0.15s ease-out;
-  }
-  
-  .progress-text {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 1.2rem;
-    color: #8be1b4;
-    letter-spacing: 1px;
   }
 </style>

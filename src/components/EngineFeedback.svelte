@@ -7,7 +7,7 @@
   $: currentMove = $moves[$activePly];
 </script>
 
-{#if currentMove && currentMove.ply > 0}
+{#if currentMove && currentMove.ply > 0 && currentMove.classification}
   <div class="engine-feedback">
     <div class="engine-feedback__header">
       <Badge classification={currentMove.classification} size={28} />
@@ -22,8 +22,8 @@
         <span class="engine-line__move">
           <Figurine san={currentMove.san} />
         </span>
-        <span class="engine-line__eval"
-          >{formatEval(currentMove.playedEval, currentMove.mateIn)}
+        <span class="engine-line__eval">
+          {formatEval(currentMove.playedEval ?? 0, currentMove.mateIn)}
         </span>
       </div>
 
@@ -31,11 +31,12 @@
         <div class="engine-line engine-line--best">
           <span class="engine-line__label">Best:</span>
           <span class="engine-line__move">
+            <!-- This is what was crashing! It is now protected by the wrapper -->
             <Figurine san={currentMove.bestMoveSan} />
           </span>
-          <span class="engine-line__eval"
-            >{formatEval(currentMove.prevBestEval)}</span
-          >
+          <span class="engine-line__eval">
+            {formatEval(currentMove.prevBestEval ?? 0)}
+          </span>
         </div>
       {/if}
     </div>

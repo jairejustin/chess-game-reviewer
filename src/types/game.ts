@@ -3,12 +3,14 @@ export interface AnalyzedMove {
   san: string;
   fen: string;
   uci: String;
-  prevBestEval: number;
-  playedEval: number;
-  bestMoveSan: string;
-  classification: MoveBadge;
-  principalVariation: string[];
-  mateIn: number | null;
+
+  // data from analysis
+  prevBestEval?: number;
+  playedEval?: number;
+  bestMoveSan?: string;
+  classification?: MoveBadge;
+  principalVariation?: string[];
+  mateIn?: number | null;
 }
 
 export interface AnalysisProgress {

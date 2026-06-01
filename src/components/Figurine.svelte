@@ -5,7 +5,7 @@
   import ChessBishop from 'lucide-svelte/icons/chess-bishop';
   import ChessKnight from 'lucide-svelte/icons/chess-knight';
 
-  export let san: string;
+  export let san: string | undefined;
 
   const pieceIcons: Record<string, any> = {
     K: ChessKing,
@@ -16,10 +16,12 @@
   };
 
   $: parsed = (() => {
+    // Safety guard for undefined/empty strings
+    if (!san) return { piece: null, text: '' };
+    
     if (san === 'O-O' || san === 'O-O-O') return { piece: null, text: san };
-
+    
     const match = san.match(/^([KQRBN])?(.*)$/);
-
     if (match && match[1]) {
       return { piece: match[1], text: match[2] };
     }
@@ -48,13 +50,11 @@
     font-weight: 600;
     line-height: 1rem;
   }
-
   .figurine-move__icon {
     display: inline-flex;
     align-items: center;
     transform: translateY(-1.5px);
   }
-
   .figurine-move__text {
     letter-spacing: 0.2px;
   }
