@@ -1,28 +1,22 @@
 <script lang="ts">
-  import { invoke } from '@tauri-apps/api/core';
   import {
+    usernameInput,
+    selectedPlatform,
     fetchedProfile,
     fetchedGames,
     selectedGame,
     isFetching,
     fetchError,
     hasMore,
-    fetchCursor,
     fetchGames,
     loadMore
   } from '../store/fetchStore';
-  import { isAnalyzing, sidebarView } from '../store/gameStore';
-  import type { Platform } from '../types/fetch';
 
   import Loader2 from 'lucide-svelte/icons/loader-2';
-  import Cpu from 'lucide-svelte/icons/cpu';
-
-  let platform: Platform = 'chesscom';
-  let username = '';
 
   function handleFetch() {
-    if (!username.trim()) return;
-    fetchGames(username.trim(), platform);
+    if (!$usernameInput.trim()) return;
+    fetchGames($usernameInput.trim(), $selectedPlatform);
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -31,8 +25,8 @@
 
   function formatResult(result: string): string {
     if (result === '1/2-1/2') return '½–½';
-    if (result === '1-0') return '1–0';
-    if (result === '0-1') return '0–1';
+    if (result === '1-0') return '1-0';
+    if (result === '0-1') return '0-1';
     return result;
   }
 
@@ -40,25 +34,24 @@
     return tc.charAt(0).toUpperCase() + tc.slice(1);
   }
 
-  export let onAnalyze: (pgn: string) => void;
 </script>
 
 <div class="fetch-games">
   <div class="platform-toggle">
     <button
       class="platform-btn"
-      class:platform-btn--active={platform === 'chesscom'}
+      class:platform-btn--active={$selectedPlatform === 'chesscom'}
       on:click={() => {
-        platform = 'chesscom';
+        $selectedPlatform = 'chesscom';
       }}
     >
       Chess.com
     </button>
     <button
       class="platform-btn"
-      class:platform-btn--active={platform === 'lichess'}
+      class:platform-btn--active={$selectedPlatform === 'lichess'}
       on:click={() => {
-        platform = 'lichess';
+        $selectedPlatform = 'lichess';
       }}
     >
       Lichess
@@ -69,17 +62,17 @@
     <input
       class="fetch-input"
       type="text"
-      placeholder={platform === 'chesscom'
+      placeholder={$selectedPlatform === 'chesscom'
         ? 'Chess.com username'
         : 'Lichess username'}
-      bind:value={username}
+      bind:value={$usernameInput}
       on:keydown={handleKeydown}
       disabled={$isFetching}
     />
     <button
       class="fetch-btn"
       on:click={handleFetch}
-      disabled={$isFetching || !username.trim()}
+      disabled={$isFetching || !$usernameInput.trim()}
     >
       {#if $isFetching && !$fetchedGames.length}
         <Loader2 size={16} class="spin" strokeWidth={2.5} />
@@ -128,10 +121,27 @@
     <div class="game-list">
       {#each $fetchedGames as game}
         {@const isSelected = $selectedGame?.id === game.id}
+
+        {@const canonicalUser = $fetchedProfile?.username || $usernameInput}
         {@const userIsWhite =
-          game.white.username.toLowerCase() === username.toLowerCase()}
+          game.white.username.toLowerCase() === canonicalUser.toLowerCase()}
+
         {@const opponent = userIsWhite ? game.black : game.white}
         {@const userSide = userIsWhite ? game.white : game.black}
+
+        {@const res = userSide.result}
+        {@const isWin =
+          res === 'win' ||
+          (userIsWhite && res === '1-0') ||
+          (!userIsWhite && res === '0-1')}
+        {@const isLoss =
+          res === 'checkmated' ||
+          res === 'timeout' ||
+          res === 'resign' ||
+          res === 'lose' ||
+          res === 'abandoned' ||
+          (userIsWhite && res === '0-1') ||
+          (!userIsWhite && res === '1-0')}
 
         <button
           class="game-row"
@@ -149,21 +159,15 @@
               {/if}
             </span>
           </div>
+
           <div class="game-row__right">
             <span
               class="game-row__result"
-              class:game-row__result--win={userSide.result === '1-0' ||
-                (userIsWhite
-                  ? game.white.result === '1-0'
-                  : game.black.result === '0-1')}
-              class:game-row__result--loss={userIsWhite
-                ? game.white.result === '0-1'
-                : game.black.result === '1-0'}
-              class:game-row__result--draw={userSide.result === '1/2-1/2'}
+              class:game-row__result--win={isWin}
+              class:game-row__result--loss={isLoss}
+              class:game-row__result--draw={!isWin && !isLoss}
             >
-              {formatResult(
-                userIsWhite ? game.white.result : game.black.result
-              )}
+              {formatResult(res)}
             </span>
           </div>
         </button>
@@ -172,7 +176,7 @@
       {#if $hasMore}
         <button
           class="load-more-btn"
-          on:click={() => loadMore(username, platform)}
+          on:click={() => loadMore($usernameInput, $selectedPlatform)}
           disabled={$isFetching}
         >
           {#if $isFetching}
@@ -182,22 +186,6 @@
           {/if}
         </button>
       {/if}
-    </div>
-  {/if}
-
-  {#if $selectedGame}
-    <div class="analyze-bar">
-      <button
-        class="analyze-btn"
-        on:click={() => onAnalyze($selectedGame!.pgn)}
-        disabled={$isAnalyzing}
-      >
-        {#if $isAnalyzing}
-          <Loader2 size={18} class="spin" strokeWidth={3} /> Analyzing…
-        {:else}
-          <Cpu size={18} strokeWidth={3} /> Analyze This Game
-        {/if}
-      </button>
     </div>
   {/if}
 </div>
@@ -451,36 +439,4 @@
     cursor: not-allowed;
   }
 
-  .analyze-bar {
-    position: sticky;
-    bottom: 0;
-    background: #161618;
-    padding-top: 0.75rem;
-    margin-top: auto;
-  }
-  .analyze-btn {
-    background: #1b382b;
-    border: 1px solid #2b5743;
-    color: #8be1b4;
-    padding: 0.8rem 1.2rem;
-    border-radius: 8px;
-    cursor: pointer;
-    font-family: 'Outfit', sans-serif;
-    font-weight: 600;
-    font-size: 1rem;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    width: 100%;
-  }
-  .analyze-btn:hover:not(:disabled) {
-    background: #234737;
-    border-color: #3b7359;
-  }
-  .analyze-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
 </style>

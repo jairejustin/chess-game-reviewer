@@ -7,6 +7,9 @@ import type {
   Platform
 } from '../types/fetch';
 
+export const usernameInput = writable<string>('');
+export const selectedPlatform = writable<Platform>('lichess');
+
 export const fetchedProfile = writable<FetchResult['profile'] | null>(null);
 export const fetchedGames = writable<GameSummary[]>([]);
 export const selectedGame = writable<GameSummary | null>(null);
@@ -31,10 +34,8 @@ export async function fetchGames(
     });
 
     if (cursor) {
-      // Load more — append
       fetchedGames.update((g) => [...g, ...result.games]);
     } else {
-      // Fresh fetch — replace
       fetchedGames.set(result.games);
       fetchedProfile.set(result.profile);
       selectedGame.set(null);
