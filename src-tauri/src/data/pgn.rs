@@ -1,12 +1,14 @@
 use crate::models::game::GameMetadata;
 use pgn_reader::{SanPlus, Visitor};
 use shakmaty::fen::Fen;
-use shakmaty::{Chess, EnPassantMode, Position};
+use shakmaty::{
+    CastlingMode, Chess, EnPassantMode, Position,
+};
 use std::ops::ControlFlow;
 
 pub struct PgnVisitor {
     board: Chess,
-    positions: Vec<(String, String)>,
+    positions: Vec<(String, String, String)>,
     metadata: GameMetadata,
 }
 
@@ -30,8 +32,10 @@ impl Visitor for PgnVisitor {
     type Tags = ();
     type Movetext = ();
 
-    type Output =
-        (GameMetadata, Vec<(String, String)>);
+    type Output = (
+        GameMetadata,
+        Vec<(String, String, String)>,
+    );
 
     fn begin_tags(
         &mut self,
@@ -99,6 +103,9 @@ impl Visitor for PgnVisitor {
             san_plus.san.to_move(&self.board)
         {
             let san_string = san_plus.to_string();
+
+            let uci_string = shakmaty::uci::UciMove::from_move(m, CastlingMode::Standard).to_string();
+
             self.board = self
                 .board
                 .clone()
@@ -111,8 +118,9 @@ impl Visitor for PgnVisitor {
             )
             .to_string();
 
-            self.positions
-                .push((san_string, fen));
+            self.positions.push((
+                san_string, fen, uci_string,
+            ));
         }
         ControlFlow::Continue(())
     }
@@ -142,7 +150,6 @@ mod tests {
         let mut reader = Reader::new(
             Cursor::new(pgn.as_bytes()),
         );
-        // Note: unpacking the tuple using .1 to get positions
         let positions = reader
             .read_game(&mut visitor)
             .unwrap()
@@ -192,8 +199,6 @@ mod tests {
         let mut reader = Reader::new(
             Cursor::new(pgn.as_bytes()),
         );
-
-        // Unpack the .0 to test metadata
         let metadata = reader
             .read_game(&mut visitor)
             .unwrap()

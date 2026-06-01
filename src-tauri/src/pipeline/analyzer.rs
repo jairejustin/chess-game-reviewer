@@ -209,7 +209,7 @@ pub fn run_analysis_pipeline(
     };
 
     // Iterates over the moves and analyzes them
-    for (san, fen) in positions {
+    for (san, fen, _uci) in positions {
         // Determines the previous position command
         let prev_pos_cmd =
             if uci_moves_history.is_empty() {
