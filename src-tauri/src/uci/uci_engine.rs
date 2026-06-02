@@ -85,14 +85,11 @@ impl UciEngine {
     pub fn analyze_position(
         &mut self,
         position_cmd: &str,
-        time_ms: u32,
+        go_cmd: &str,
     ) -> (Evaluation, String, Vec<String>, Vec<i32>)
     {
         self.send_command(position_cmd);
-        self.send_command(&format!(
-            "go movetime {}",
-            time_ms
-        ));
+        self.send_command(go_cmd);
 
         let mut last_eval = Evaluation::Cp(0);
         let mut last_pv = Vec::new();

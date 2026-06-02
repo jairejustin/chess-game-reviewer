@@ -76,10 +76,9 @@ pub fn run_analysis_pipeline(
 
     // Starting position
     let initial_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-
     let initial_pos_cmd = "position startpos";
 
-    // Loads Starting position
+    // Loads Starting position using hybrid limit
     let (
         initial_eval,
         initial_best_move,
@@ -87,7 +86,10 @@ pub fn run_analysis_pipeline(
         initial_multi_pv_evals,
     ) = engine.analyze_position(
         initial_pos_cmd,
-        time_ms,
+        &format!(
+            "go depth 22 movetime {}",
+            time_ms
+        ),
     );
 
     // The evaluation score from the position immediately preceding the move the player is about to make.
@@ -216,6 +218,45 @@ pub fn run_analysis_pipeline(
                 )
             };
 
+        // Parse previous board state for early checks
+        let prev_pos =
+            Fen::from_ascii(prev_fen.as_bytes())
+                .ok()
+                .and_then(|f| {
+                    f.into_position::<Chess>(
+                        CastlingMode::Standard,
+                    )
+                    .ok()
+                });
+
+        // Fast checks: Evaluate book and forced moves before hitting the engine
+        let is_forced_move = prev_pos
+            .as_ref()
+            .map(|pos| {
+                pos.legal_moves().len() == 1
+            })
+            .unwrap_or(false);
+
+        let is_book_flag = prev_pos
+            .as_ref()
+            .map(|pos| {
+                book.is_book_move(
+                    pos, &prev_fen, &san,
+                )
+            })
+            .unwrap_or(false);
+
+        // Dynamic Engine Limits
+        let go_cmd =
+            if is_book_flag || is_forced_move {
+                "go depth 12".to_string()
+            } else {
+                format!(
+                    "go depth 22 movetime {}",
+                    time_ms
+                )
+            };
+
         // Plays move on board and build history command
         let parsed_san =
             San::from_ascii(san.as_bytes()).ok();
@@ -247,7 +288,7 @@ pub fn run_analysis_pipeline(
             uci_moves_history.join(" ")
         );
 
-        // Fast Evaluation
+        // Fast Evaluation with dynamic limits
         let (
             mut played_eval,
             mut opponent_best_move,
@@ -255,19 +296,8 @@ pub fn run_analysis_pipeline(
             mut multi_pv_evals,
         ) = engine.analyze_position(
             &current_pos_cmd,
-            time_ms,
+            &go_cmd,
         );
-
-        // Parse previous board state to convert UCI to SAN
-        let prev_pos =
-            Fen::from_ascii(prev_fen.as_bytes())
-                .ok()
-                .and_then(|f| {
-                    f.into_position::<Chess>(
-                        CastlingMode::Standard,
-                    )
-                    .ok()
-                });
 
         // What move was the player expected to play?
         let mut best_move_san = get_san(
@@ -304,6 +334,10 @@ pub fn run_analysis_pipeline(
         {
             // 3.5s investigation allocation
             let deep_time = 3500;
+            let deep_cmd = format!(
+                "go depth 24 movetime {}",
+                deep_time
+            );
 
             // Re-evaluate the prev position deeply
             let (
@@ -313,7 +347,7 @@ pub fn run_analysis_pipeline(
                 deep_prev_multi,
             ) = engine.analyze_position(
                 &prev_pos_cmd,
-                deep_time,
+                &deep_cmd,
             );
 
             // Re-evaluate the current position deeply
@@ -324,7 +358,7 @@ pub fn run_analysis_pipeline(
                 deep_multi,
             ) = engine.analyze_position(
                 &current_pos_cmd,
-                deep_time,
+                &deep_cmd,
             );
 
             // Overwrite Previous State
@@ -403,7 +437,8 @@ pub fn run_analysis_pipeline(
                 prev_win_loss,
                 &prev_multi_pv_evals,
                 ply_count,
-                &book,
+                is_book_flag,
+                is_forced_move,
             );
 
         let positive_loss =
@@ -566,7 +601,8 @@ fn evaluate_move_context(
     prev_win_loss: f64,
     multi_pv_evals: &[i32],
     ply_count: u32,
-    book: &OpeningBook,
+    is_book_flag: bool,
+    is_forced_move: bool,
 ) -> (MoveBadge, f64) {
     // A multiplier to convert White-normalized scores into the moving player's perspective.
     let pov_multiplier =
@@ -593,7 +629,7 @@ fn evaluate_move_context(
         .unwrap_or(class_prev_eval);
 
     // Parsed board state before the move.
-    // Is used to check for sacrifices, forced moves, legal moves, and book lookups.
+    // Is used to check for sacrifices and legal moves.
     let prev_pos =
         Fen::from_ascii(prev_fen.as_bytes())
             .ok()
@@ -615,12 +651,6 @@ fn evaluate_move_context(
                 )
                 .ok()
             });
-
-    // Checks if its the only legal move
-    let is_forced_move = prev_pos
-        .as_ref()
-        .map(|pos| pos.legal_moves().len() == 1)
-        .unwrap_or(false);
 
     let played_move =
         prev_pos.as_ref().and_then(|pos| {
@@ -658,21 +688,11 @@ fn evaluate_move_context(
     // However, this requires zero calculation from the player. We explicitly flag
     // immediate recaptures on the same square so the classifier degrades them
     // from "Great" down to "Best"
-    // Basically just a check to avoid awarding "Great" moves for an obvious recapture.
     let is_obvious_recapture = prev_target
         .is_some()
         && current_target.is_some()
         && prev_target == current_target
         && san.contains('x');
-
-    // Pass the position from before the move so the book checks if
-    // the played san is a theory move from given previous pos.
-    let is_book_flag = prev_pos
-        .as_ref()
-        .map(|pos| {
-            book.is_book_move(pos, prev_fen, san)
-        })
-        .unwrap_or(false);
 
     let is_best_engine_move =
         san == best_move_san;
