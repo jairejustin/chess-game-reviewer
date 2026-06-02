@@ -56,15 +56,9 @@ pub fn run_analysis_pipeline(
 
     // temp fix
     // Bypass Tauri's resource and externalBin resolver for now.
-    let target_triple =
-        "x86_64-unknown-linux-gnu";
-
     let engine_path = std::env::current_dir()
         .unwrap()
-        .join(format!(
-            "core/engine/theoria-{}",
-            target_triple
-        ));
+        .join("core/engine/stockfish-ubuntu-x86-64-bmi2");
 
     let book_path = std::env::current_dir()
         .unwrap()
