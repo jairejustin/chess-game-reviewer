@@ -75,8 +75,8 @@ pub fn classify(
         } else {
             MoveBadge::Excellent
         }
-    } else if delta <= 0
-        || args.is_best_engine_move
+    } else if args.is_best_engine_move
+        || delta <= 0
     {
         MoveBadge::Best
     } else {
@@ -87,8 +87,7 @@ pub fn classify(
                 MoveBadge::Inaccuracy
             }
             w if w >= 2.0 => MoveBadge::Good,
-            w if w >= 0.1 => MoveBadge::Excellent,
-            _ => MoveBadge::Best,
+            _ => MoveBadge::Excellent,
         }
     };
 
@@ -121,6 +120,7 @@ pub fn classify(
     // a tightrope where any other choice would have lost the advantage or straight up loses.
     if (classification == MoveBadge::Best
         || classification == MoveBadge::Excellent)
+        && args.prev_eval.abs() >= -100
         && args.prev_eval.abs() <= 1000
         && is_great_move(
             args.played_eval,
@@ -373,10 +373,10 @@ mod tests {
     #[test]
     fn excellent_by_win_percent_drop() {
         let args = ClassifyArgs {
-            prev_eval: 50,
+            prev_eval: 55,
             played_eval: 40,
-            prev_best_eval: 50,
-            multi_pv_evals: &[50, 40],
+            prev_best_eval: 55,
+            multi_pv_evals: &[55, 40],
             ..Default::default()
         };
         assert_eq!(
