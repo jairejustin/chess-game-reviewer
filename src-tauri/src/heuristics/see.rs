@@ -124,5 +124,28 @@ pub fn is_sacrifice(
     played_move: &Move,
 ) -> bool {
     let target_sq = played_move.to();
-    legal_see(pre_move_pos, target_sq) >= 2
+
+    // Identifies the value of the piece being captured (0 on empty square)
+    let captured_val = pre_move_pos
+        .board()
+        .piece_at(target_sq)
+        .map(|p| piece_value(p.role))
+        .unwrap_or(0);
+
+    // Plays the move to shift the turn perspective to the opponent
+    let next_pos = pre_move_pos
+        .clone()
+        .play(played_move.clone())
+        .unwrap();
+
+    // Calculates how much the opponent can win on that square
+    let opponent_gain =
+        legal_see(&next_pos, target_sq);
+
+    // Calculates the net material exchange for the moving player
+    let net_gain = captured_val - opponent_gain;
+
+    // A significant material sacrifice occurs when the player voluntarily 
+    // loses >= 2 points in the exchange
+    net_gain <= -2
 }
