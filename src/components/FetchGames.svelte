@@ -14,6 +14,16 @@
 
   import Loader2 from 'lucide-svelte/icons/loader-2';
 
+  let currentTab: 'chesscom' | 'lichess' | 'paste' = $selectedPlatform;
+  let manualPgnInput = '';
+
+  function setTab(tab: 'chesscom' | 'lichess' | 'paste') {
+    currentTab = tab;
+    if (tab !== 'paste') {
+      $selectedPlatform = tab;
+    }
+  }
+
   function handleFetch() {
     if (!$usernameInput.trim()) return;
     fetchGames($usernameInput.trim(), $selectedPlatform);
@@ -33,158 +43,204 @@
   function formatTimeClass(tc: string): string {
     return tc.charAt(0).toUpperCase() + tc.slice(1);
   }
+
+  function handleManualImport() {
+    if (!manualPgnInput.trim()) return;
+
+    const whiteMatch = manualPgnInput.match(/\[White "(.*?)"\]/);
+    const blackMatch = manualPgnInput.match(/\[Black "(.*?)"\]/);
+    const resultMatch = manualPgnInput.match(/\[Result "(.*?)"\]/);
+
+    const res = resultMatch ? resultMatch[1] : '*';
+
+    const manualGame: any = {
+      id: 'manual-' + Date.now(),
+      timeClass: 'manual',
+      pgn: manualPgnInput,
+      white: {
+        username: whiteMatch ? whiteMatch[1] : 'White',
+        result: res
+      },
+      black: {
+        username: blackMatch ? blackMatch[1] : 'Black',
+        result: res
+      }
+    };
+
+    selectedGame.set(manualGame);
+    manualPgnInput = '';
+  }
 </script>
 
 <div class="fetch-games">
   <div class="platform-toggle">
     <button
       class="platform-btn"
-      class:platform-btn--active={$selectedPlatform === 'chesscom'}
-      on:click={() => {
-        $selectedPlatform = 'chesscom';
-      }}
+      class:platform-btn--active={currentTab === 'chesscom'}
+      on:click={() => setTab('chesscom')}
     >
       Chess.com
     </button>
     <button
       class="platform-btn"
-      class:platform-btn--active={$selectedPlatform === 'lichess'}
-      on:click={() => {
-        $selectedPlatform = 'lichess';
-      }}
+      class:platform-btn--active={currentTab === 'lichess'}
+      on:click={() => setTab('lichess')}
     >
       Lichess
     </button>
-  </div>
-
-  <div class="fetch-input-row">
-    <input
-      class="fetch-input"
-      type="text"
-      placeholder={$selectedPlatform === 'chesscom'
-        ? 'Chess.com username'
-        : 'Lichess username'}
-      bind:value={$usernameInput}
-      on:keydown={handleKeydown}
-      disabled={$isFetching}
-    />
     <button
-      class="fetch-btn"
-      on:click={handleFetch}
-      disabled={$isFetching || !$usernameInput.trim()}
+      class="platform-btn"
+      class:platform-btn--active={currentTab === 'paste'}
+      on:click={() => setTab('paste')}
     >
-      {#if $isFetching && !$fetchedGames.length}
-        <Loader2 size={16} class="spin" strokeWidth={2.5} />
-      {:else}
-        Fetch
-      {/if}
+      Paste PGN
     </button>
   </div>
 
-  {#if $fetchError}
-    <p class="fetch-error">{$fetchError}</p>
-  {/if}
-
-  {#if $fetchedProfile}
-    <div class="profile-strip">
-      <div class="profile-strip__avatar">
-        {#if $fetchedProfile.avatarUrl}
-          <img src={$fetchedProfile.avatarUrl} alt={$fetchedProfile.username} />
+  {#if currentTab !== 'paste'}
+    <div class="fetch-input-row">
+      <input
+        class="fetch-input"
+        type="text"
+        placeholder={'Username'}
+        bind:value={$usernameInput}
+        on:keydown={handleKeydown}
+        disabled={$isFetching}
+      />
+      <button
+        class="fetch-btn"
+        on:click={handleFetch}
+        disabled={$isFetching || !$usernameInput.trim()}
+      >
+        {#if $isFetching && !$fetchedGames.length}
+          <Loader2 size={16} class="spin" strokeWidth={2.5} />
         {:else}
-          <div class="profile-strip__avatar-fallback">
-            {$fetchedProfile.username.charAt(0).toUpperCase()}
-          </div>
+          Fetch
         {/if}
-      </div>
-      <div class="profile-strip__info">
-        {#if $fetchedProfile.title}
-          <span class="player-title">{$fetchedProfile.title}</span>
-        {/if}
-        <span class="profile-strip__name">{$fetchedProfile.username}</span>
-        <div class="profile-strip__meta">
-          {#if $fetchedProfile.countryCode}
-            <span class="profile-strip__tag">{$fetchedProfile.countryCode}</span
-            >
+      </button>
+    </div>
+
+    {#if $fetchError}
+      <p class="fetch-error">{$fetchError}</p>
+    {/if}
+
+    {#if $fetchedProfile}
+      <div class="profile-strip">
+        <div class="profile-strip__avatar">
+          {#if $fetchedProfile.avatarUrl}
+            <img src={$fetchedProfile.avatarUrl} alt={$fetchedProfile.username} />
+          {:else}
+            <div class="profile-strip__avatar-fallback">
+              {$fetchedProfile.username.charAt(0).toUpperCase()}
+            </div>
           {/if}
         </div>
-      </div>
-    </div>
-  {/if}
-
-  {#if $fetchedGames.length > 0}
-    <div class="game-list">
-      {#each $fetchedGames as game}
-        {@const isSelected = $selectedGame?.id === game.id}
-
-        {@const canonicalUser = $fetchedProfile?.username || $usernameInput}
-        {@const userIsWhite =
-          game.white.username.toLowerCase() === canonicalUser.toLowerCase()}
-
-        {@const opponent = userIsWhite ? game.black : game.white}
-        {@const userSide = userIsWhite ? game.white : game.black}
-
-        {@const res = userSide.result}
-        {@const isWin =
-          res === 'win' ||
-          (userIsWhite && res === '1-0') ||
-          (!userIsWhite && res === '0-1')}
-        {@const isLoss =
-          res === 'checkmated' ||
-          res === 'timeout' ||
-          res === 'resign' ||
-          res === 'lose' ||
-          res === 'abandoned' ||
-          (userIsWhite && res === '0-1') ||
-          (!userIsWhite && res === '1-0')}
-
-        <button
-          class="game-row"
-          class:game-row--selected={isSelected}
-          on:click={() => selectedGame.set(game)}
-        >
-          <div class="game-row__left">
-            <span class="game-row__time-class"
-              >{formatTimeClass(game.timeClass)}</span
-            >
-            <span class="game-row__opponent">
-              vs {opponent.username}
-              {#if opponent.rating}
-                <span class="game-row__rating">({opponent.rating})</span>
-              {/if}
-            </span>
-          </div>
-
-          <div class="game-row__right">
-            <span
-              class="game-row__result"
-              class:game-row__result--win={isWin}
-              class:game-row__result--loss={isLoss}
-              class:game-row__result--draw={!isWin && !isLoss}
-            >
-              {formatResult(res)}
-            </span>
-          </div>
-        </button>
-      {/each}
-
-      {#if $hasMore}
-        <button
-          class="load-more-btn"
-          on:click={() => loadMore($usernameInput, $selectedPlatform)}
-          disabled={$isFetching}
-        >
-          {#if $isFetching}
-            <Loader2 size={16} class="spin" strokeWidth={2.5} /> Loading...
-          {:else}
-            Load More
+        <div class="profile-strip__info">
+          {#if $fetchedProfile.title}
+            <span class="player-title">{$fetchedProfile.title}</span>
           {/if}
-        </button>
-      {/if}
+          <span class="profile-strip__name">{$fetchedProfile.username}</span>
+          <div class="profile-strip__meta">
+            {#if $fetchedProfile.countryCode}
+              <span class="profile-strip__tag">{$fetchedProfile.countryCode}</span>
+            {/if}
+          </div>
+        </div>
+      </div>
+    {/if}
+
+    {#if $fetchedGames.length > 0}
+      <div class="game-list">
+        {#each $fetchedGames as game}
+          {@const isSelected = $selectedGame?.id === game.id}
+
+          {@const canonicalUser = $fetchedProfile?.username || $usernameInput}
+          {@const userIsWhite =
+            game.white.username.toLowerCase() === canonicalUser.toLowerCase()}
+
+          {@const opponent = userIsWhite ? game.black : game.white}
+          {@const userSide = userIsWhite ? game.white : game.black}
+
+          {@const res = userSide.result}
+          {@const isWin =
+            res === 'win' ||
+            (userIsWhite && res === '1-0') ||
+            (!userIsWhite && res === '0-1')}
+          {@const isLoss =
+            res === 'checkmated' ||
+            res === 'timeout' ||
+            res === 'resign' ||
+            res === 'lose' ||
+            res === 'abandoned' ||
+            (userIsWhite && res === '0-1') ||
+            (!userIsWhite && res === '1-0')}
+
+          <button
+            class="game-row"
+            class:game-row--selected={isSelected}
+            on:click={() => selectedGame.set(game)}
+          >
+            <div class="game-row__left">
+              <span class="game-row__time-class"
+                >{formatTimeClass(game.timeClass)}</span
+              >
+              <span class="game-row__opponent">
+                vs {opponent.username}
+                {#if opponent.rating}
+                  <span class="game-row__rating">({opponent.rating})</span>
+                {/if}
+              </span>
+            </div>
+
+            <div class="game-row__right">
+              <span
+                class="game-row__result"
+                class:game-row__result--win={isWin}
+                class:game-row__result--loss={isLoss}
+                class:game-row__result--draw={!isWin && !isLoss}
+              >
+                {formatResult(res)}
+              </span>
+            </div>
+          </button>
+        {/each}
+
+        {#if $hasMore}
+          <button
+            class="load-more-btn"
+            on:click={() => loadMore($usernameInput, $selectedPlatform)}
+            disabled={$isFetching}
+          >
+            {#if $isFetching}
+              <Loader2 size={16} class="spin" strokeWidth={2.5} /> Loading...
+            {:else}
+              Load More
+            {/if}
+          </button>
+        {/if}
+      </div>
+    {/if}
+
+  {:else}
+    <div class="paste-section">
+      <textarea
+        class="pgn-textarea"
+        placeholder="[Event &quot;Live Chess&quot;]&#10;[White &quot;Player1&quot;]&#10;[Black &quot;Player2&quot;]&#10;..."
+        bind:value={manualPgnInput}
+      ></textarea>
+      <button
+        class="fetch-btn load-more-btn"
+        on:click={handleManualImport}
+        disabled={!manualPgnInput.trim()}
+      >
+        Import Game
+      </button>
     </div>
   {/if}
 </div>
 
 <style>
+
   .fetch-games {
     padding: 1.25rem;
     display: flex;
@@ -256,6 +312,7 @@
     transition: all 0.15s ease;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 0.4rem;
     white-space: nowrap;
   }
@@ -442,5 +499,31 @@
     border-radius: 4px;
     line-height: 1;
     text-transform: uppercase;
+  }
+
+  .paste-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    height: 100%;
+  }
+
+  .pgn-textarea {
+    flex: 1;
+    min-height: 150px;
+    background: #111;
+    border: 1px solid #333;
+    padding: 0.75rem;
+    border-radius: 6px;
+    color: #ececec;
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    font-size: 0.85rem;
+    resize: none;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  
+  .pgn-textarea:focus {
+    border-color: #555;
   }
 </style>

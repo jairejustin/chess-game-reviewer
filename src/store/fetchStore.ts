@@ -8,7 +8,7 @@ import type {
 } from '../types/fetch';
 
 export const usernameInput = writable<string>('');
-export const selectedPlatform = writable<Platform>('lichess');
+export const selectedPlatform = writable<Platform>('chesscom');
 
 export const fetchedProfile = writable<FetchResult['profile'] | null>(null);
 export const fetchedGames = writable<GameSummary[]>([]);
