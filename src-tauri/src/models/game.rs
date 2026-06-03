@@ -28,6 +28,7 @@ pub struct AnalyzedMove {
     pub uci: String,
     pub played_eval: i32,
     pub mate_in: Option<i32>,
+    pub best_mate_in: Option<i32>,
     pub prev_best_eval: i32,
     pub best_move_san: String,
     pub classification: MoveBadge,

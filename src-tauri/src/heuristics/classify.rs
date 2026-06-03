@@ -15,6 +15,18 @@ pub struct ClassifyArgs<'a> {
     pub prev_win_loss: f64,
     pub is_forced_move: bool,
     pub is_best_engine_move: bool,
+    pub is_delivering_mate: bool,
+    pub is_getting_mated: bool,
+    /// Mate score from the best engine move, in the moving player's POV.
+    /// Positive = the moving player is delivering mate in N moves.
+    /// Negative = the moving player is getting mated in N moves.
+    /// None = the best move does not lead to a forced mate.
+    pub best_mate: Option<i32>,
+    /// Mate score from the played move, in the moving player's POV.
+    /// Positive = the moving player is delivering mate in N moves.
+    /// Negative = the moving player is getting mated in N moves.
+    /// None = the played move does not lead to a forced mate.
+    pub played_mate: Option<i32>,
 }
 
 impl<'a> Default for ClassifyArgs<'a> {
@@ -30,7 +42,80 @@ impl<'a> Default for ClassifyArgs<'a> {
             prev_win_loss: 0.0,
             is_forced_move: false,
             is_best_engine_move: false,
+            is_delivering_mate: false,
+            is_getting_mated: false,
+            best_mate: None,
+            played_mate: None,
         }
+    }
+}
+
+/// Classifies a move when both the best line and the played line are in a
+/// forced-mate sequence, using the raw mate-in-N distances.
+///
+/// Both values are in the moving player's POV:
+/// - Positive  = moving player is delivering mate (attacker).
+/// - Negative  = moving player is getting mated (defender).
+///
+/// Returns `None` when the situation is not a pure mate-vs-mate comparison
+fn classify_mate_vs_mate(
+    best_mate: i32,
+    played_mate: i32,
+    is_best_engine_move: bool,
+) -> Option<MoveBadge> {
+    match (best_mate > 0, played_mate > 0) {
+        // Attacker (positive mate values means moving player is mating)
+        (true, true) => {
+            if is_best_engine_move
+                || played_mate <= best_mate
+            {
+                // Played the fastest (or equally fast) forced mate => Best
+                Some(MoveBadge::Best)
+            } else {
+                // Played a checkmating move, but slower than optimal
+                let delay =
+                    played_mate - best_mate;
+                Some(if delay <= 2 {
+                    // Within 2 moves of the fastest line, close enough to call Excellent
+                    MoveBadge::Excellent
+                } else if delay <= 6 {
+                    // Noticeably slower, but still a clean win
+                    MoveBadge::Good
+                } else {
+                    // Seriously prolonged the win
+                    MoveBadge::Inaccuracy
+                })
+            }
+        }
+
+        // Defender (negative mate values means opponent is mating)
+        (false, false) => {
+            // Both sides: engine says getting mated in |best_mate|,
+            // played move gets mated in |played_mate|.
+            // "More negative" = mated sooner, "less negative" = more resilient.
+            if is_best_engine_move
+                || played_mate <= best_mate
+            {
+                // Found the most resilient defense (or equally good) => Best
+                Some(MoveBadge::Best)
+            } else {
+                // Allowed faster mate than necessary
+                let hastened =
+                    played_mate - best_mate;
+                Some(if hastened <= 2 {
+                    MoveBadge::Excellent
+                } else if hastened <= 5 {
+                    MoveBadge::Inaccuracy
+                } else {
+                    MoveBadge::Mistake
+                })
+            }
+        }
+
+        // Attacker slipped and defender escaped mate / Defender found a mate
+        // These are dramatic positional swings; fall through to the
+        // win-probability classifier, which handles them naturally.
+        _ => None,
     }
 }
 
@@ -62,36 +147,75 @@ pub fn classify(
         return (MoveBadge::Forced, win_loss);
     }
 
-    // Base Classification
-    let mut classification = if args
-        .prev_eval
-        .abs()
-        > 1000
-        && args.played_eval.abs() > 1000
-    {
-        if delta <= 0 || args.is_best_engine_move
+    // Mate Distance Classification
+    // When both the best line and the played line are in a forced-mate sequence,
+    // the -+10000 centipawn clamping used elsewhere is too coarse: it cannot
+    // distinguish "mate in 1" from "mate in 20". We use the raw mate-in-N
+    // distances instead and skip the centipawn-based base classification below.
+    let mut classification =
+        if let (Some(bm), Some(pm)) =
+            (args.best_mate, args.played_mate)
         {
-            MoveBadge::Best
-        } else {
-            MoveBadge::Excellent
-        }
-    } else if args.is_best_engine_move
-        || delta <= 0
-    {
-        MoveBadge::Best
-    } else {
-        match win_loss {
-            w if w >= 20.0 => MoveBadge::Blunder,
-            w if w >= 10.0 => MoveBadge::Mistake,
-            w if w >= 5.0 => {
-                MoveBadge::Inaccuracy
+            match classify_mate_vs_mate(
+                bm,
+                pm,
+                args.is_best_engine_move,
+            ) {
+                Some(badge) => badge,
+                // fall through to centipawn logic
+                None => {
+                    centipawn_base_classification(
+                        args.prev_eval,
+                        args.played_eval,
+                        delta,
+                        win_loss,
+                        args.is_best_engine_move,
+                    )
+                }
             }
-            w if w >= 2.0 => MoveBadge::Good,
-            _ => MoveBadge::Excellent,
-        }
-    };
+        } else {
+            // Normal (non-mate vs mate) base classification
+            // The derived `is_delivering_mate` / `is_getting_mated` flags handle the edge
+            // cases where only one side is in a mate sequence (like finding a
+            // checkmate from an equal position). Those positions still produce
+            // valid +-10000 clamped centipawn scores that the centipawn classifier handles
+            // correctly; the flags then refine the result below.
+            centipawn_base_classification(
+                args.prev_eval,
+                args.played_eval,
+                delta,
+                win_loss,
+                args.is_best_engine_move,
+            )
+        };
 
-    // Upgrades & Overrides
+    // Refinements that apply after both classification paths
+
+    // Attacker played a slower mate than the engine's best: the mate-vs-mate
+    // classifier already handles this precisely. The `is_delivering_mate` flag
+    // only fires when played_mate is None (ex. no forced mate in the played
+    // line), which means the player found *a* mating move but not the fastest
+    // forced sequence — downgrade Best -> Excellent.
+    if args.is_delivering_mate
+        && args.played_mate.is_none()
+        && !args.is_best_engine_move
+        && classification == MoveBadge::Best
+    {
+        classification = MoveBadge::Excellent;
+    }
+
+    // Defender is getting mated and played_mate is None: they were in a lost
+    // position and played a non-optimal move.  The existing centipawn logic already
+    // reflects the win-probability, but the `is_getting_mated` flag lets us
+    // catch the specific case where the best move also leads to getting mated
+    // (both evals approximately equals −10000) yet the player still played sub-optimally.
+    if args.is_getting_mated
+        && args.played_mate.is_none()
+        && !args.is_best_engine_move
+        && classification == MoveBadge::Best
+    {
+        classification = MoveBadge::Inaccuracy;
+    }
 
     // MISS: If the opponent's previous move resulted in a large drop for them (>= 5%),
     // but our current move gives 70% to 140% of that advantage right back.
@@ -152,6 +276,38 @@ pub fn classify(
     (classification, win_loss)
 }
 
+/// Centipawn base classification used when neither the best nor the played
+/// move is part of a forced mate sequence (or when one side has escaped a mate).
+fn centipawn_base_classification(
+    prev_eval: i32,
+    played_eval: i32,
+    delta: i32,
+    win_loss: f64,
+    is_best_engine_move: bool,
+) -> MoveBadge {
+    if prev_eval.abs() > 1000
+        && played_eval.abs() > 1000
+    {
+        if delta <= 0 || is_best_engine_move {
+            MoveBadge::Best
+        } else {
+            MoveBadge::Excellent
+        }
+    } else if is_best_engine_move || delta <= 0 {
+        MoveBadge::Best
+    } else {
+        match win_loss {
+            w if w >= 20.0 => MoveBadge::Blunder,
+            w if w >= 10.0 => MoveBadge::Mistake,
+            w if w >= 5.0 => {
+                MoveBadge::Inaccuracy
+            }
+            w if w >= 2.0 => MoveBadge::Good,
+            _ => MoveBadge::Excellent,
+        }
+    }
+}
+
 /// A heuristic helper function that checks if the played move was
 /// the only viable option to maintain advantage or equality.
 pub fn is_great_move(
@@ -180,6 +336,8 @@ pub fn is_great_move(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── Existing centipawn-based tests ───────────────────────────────────────────────
 
     #[test]
     fn excellent_when_position_decided_but_not_best_move(
@@ -434,10 +592,6 @@ mod tests {
     #[test]
     fn black_blunder_detected_with_corrected_pov()
     {
-        // Scenario: The position was equal (0.0). Black plays a move, and the engine
-        // eval jumps to +400 (White is winning).
-        // Our commands loop multiplies this by -1 for Black's turn,
-        // so the classifier sees prev=0 and played=-400 (Black's advantage dropped massively).
         let args = ClassifyArgs {
             prev_eval: 0,
             played_eval: -400,
@@ -454,9 +608,6 @@ mod tests {
 
     #[test]
     fn great_move_with_corrected_multi_pv_pov() {
-        // Scenario: The best move keeps a +30 advantage. The second best move gives
-        // the opponent a +150 advantage.
-        // They are negated into the moving player's POV (-150).
         let args = ClassifyArgs {
             prev_eval: 30,
             played_eval: 28,
@@ -468,6 +619,246 @@ mod tests {
         assert_eq!(
             classify(args).0,
             MoveBadge::Great
+        );
+    }
+
+    #[test]
+    fn test_attacker_plays_slower_mate_sequence()
+    {
+        let args = ClassifyArgs {
+            prev_eval: 10000,
+            played_eval: 10000,
+            prev_best_eval: 10000,
+            multi_pv_evals: &[10000, 10000],
+            is_delivering_mate: true,
+            is_best_engine_move: false,
+            ..Default::default()
+        };
+
+        assert_eq!(
+            classify(args).0,
+            MoveBadge::Excellent
+        );
+    }
+
+    #[test]
+    fn test_defender_allows_faster_mate_sequence()
+    {
+        let args = ClassifyArgs {
+            prev_eval: -10000,
+            played_eval: -10000,
+            prev_best_eval: -10000,
+            multi_pv_evals: &[-10000, -10000],
+            is_getting_mated: true,
+            is_best_engine_move: false,
+            ..Default::default()
+        };
+
+        assert_eq!(
+            classify(args).0,
+            MoveBadge::Inaccuracy
+        );
+    }
+
+    #[test]
+    fn test_defender_finds_most_resilient_line() {
+        let args = ClassifyArgs {
+            prev_eval: -10000,
+            played_eval: -10000,
+            prev_best_eval: -10000,
+            multi_pv_evals: &[-10000, -10000],
+            is_getting_mated: true,
+            is_best_engine_move: true,
+            ..Default::default()
+        };
+
+        assert_eq!(
+            classify(args).0,
+            MoveBadge::Best
+        );
+    }
+
+    #[test]
+    fn attacker_plays_fastest_mate_is_best() {
+        let args = ClassifyArgs {
+            prev_eval: 10000,
+            played_eval: 10000,
+            prev_best_eval: 10000,
+            multi_pv_evals: &[10000, 10000],
+            best_mate: Some(3),
+            played_mate: Some(3),
+            is_best_engine_move: false,
+            ..Default::default()
+        };
+        assert_eq!(
+            classify(args).0,
+            MoveBadge::Best
+        );
+    }
+
+    #[test]
+    fn attacker_plays_mate_one_move_slower_is_excellent(
+    ) {
+        let args = ClassifyArgs {
+            prev_eval: 10000,
+            played_eval: 10000,
+            prev_best_eval: 10000,
+            multi_pv_evals: &[10000, 10000],
+            best_mate: Some(2),
+            played_mate: Some(3),
+            ..Default::default()
+        };
+        assert_eq!(
+            classify(args).0,
+            MoveBadge::Excellent
+        );
+    }
+
+    #[test]
+    fn attacker_plays_mate_four_moves_slower_is_good(
+    ) {
+        let args = ClassifyArgs {
+            prev_eval: 10000,
+            played_eval: 10000,
+            prev_best_eval: 10000,
+            multi_pv_evals: &[10000, 10000],
+            best_mate: Some(1),
+            played_mate: Some(5),
+            ..Default::default()
+        };
+        assert_eq!(
+            classify(args).0,
+            MoveBadge::Good
+        );
+    }
+
+    #[test]
+    fn attacker_plays_mate_ten_moves_slower_is_inaccuracy(
+    ) {
+        let args = ClassifyArgs {
+            prev_eval: 10000,
+            played_eval: 10000,
+            prev_best_eval: 10000,
+            multi_pv_evals: &[10000, 10000],
+            best_mate: Some(3),
+            played_mate: Some(13),
+            ..Default::default()
+        };
+        assert_eq!(
+            classify(args).0,
+            MoveBadge::Inaccuracy
+        );
+    }
+
+    #[test]
+    fn attacker_with_is_best_engine_move_is_best()
+    {
+        // Even if mate distances differ, is_best_engine_move overrides
+        let args = ClassifyArgs {
+            prev_eval: 10000,
+            played_eval: 10000,
+            prev_best_eval: 10000,
+            multi_pv_evals: &[10000, 10000],
+            best_mate: Some(1),
+            played_mate: Some(1),
+            is_best_engine_move: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            classify(args).0,
+            MoveBadge::Best
+        );
+    }
+
+    #[test]
+    fn defender_finds_most_resilient_line_with_mate_distances(
+    ) {
+        let args = ClassifyArgs {
+            prev_eval: -10000,
+            played_eval: -10000,
+            prev_best_eval: -10000,
+            multi_pv_evals: &[-10000, -10000],
+            best_mate: Some(-8),
+            played_mate: Some(-8),
+            ..Default::default()
+        };
+        assert_eq!(
+            classify(args).0,
+            MoveBadge::Best
+        );
+    }
+
+    #[test]
+    fn defender_slightly_worse_is_excellent() {
+        let args = ClassifyArgs {
+            prev_eval: -10000,
+            played_eval: -10000,
+            prev_best_eval: -10000,
+            multi_pv_evals: &[-10000, -10000],
+            best_mate: Some(-8),
+            played_mate: Some(-7),
+            ..Default::default()
+        };
+        assert_eq!(
+            classify(args).0,
+            MoveBadge::Excellent
+        );
+    }
+
+    #[test]
+    fn defender_significantly_worse_is_inaccuracy(
+    ) {
+        // Best: mated in 10. Played: mated in 6. Hastened by 4 -> Inaccuracy
+        let args = ClassifyArgs {
+            prev_eval: -10000,
+            played_eval: -10000,
+            prev_best_eval: -10000,
+            multi_pv_evals: &[-10000, -10000],
+            best_mate: Some(-10),
+            played_mate: Some(-6),
+            ..Default::default()
+        };
+        assert_eq!(
+            classify(args).0,
+            MoveBadge::Inaccuracy
+        );
+    }
+
+    #[test]
+    fn defender_badly_worse_is_mistake() {
+        // Best: mated in 12. Played: mated in 4. Hastened by 8 -> Mistake
+        let args = ClassifyArgs {
+            prev_eval: -10000,
+            played_eval: -10000,
+            prev_best_eval: -10000,
+            multi_pv_evals: &[-10000, -10000],
+            best_mate: Some(-12),
+            played_mate: Some(-4),
+            ..Default::default()
+        };
+        assert_eq!(
+            classify(args).0,
+            MoveBadge::Mistake
+        );
+    }
+
+    #[test]
+    fn mixed_mate_falls_through_to_centipawn_classifier(
+    ) {
+        // Attacker's best: mate in 3 (positive). Player: no mate found, eval drops.
+        // Mixed scenario -> falls through to win-probability classifier -> Blunder.
+        let args = ClassifyArgs {
+            prev_eval: 400,
+            played_eval: -50,
+            prev_best_eval: 400,
+            multi_pv_evals: &[400, 300],
+            best_mate: Some(3), // engine found mate
+            played_mate: None, // player missed it entirely
+            ..Default::default()
+        };
+        assert_eq!(
+            classify(args).0,
+            MoveBadge::Blunder
         );
     }
 }
