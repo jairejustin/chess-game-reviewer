@@ -11,6 +11,7 @@ export interface AnalyzedMove {
   classification?: MoveBadge;
   principalVariation?: string[];
   mateIn?: number | null;
+  bestMateIn?: number | null;
 }
 
 export interface AnalysisProgress {

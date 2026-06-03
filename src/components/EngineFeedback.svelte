@@ -31,11 +31,10 @@
         <div class="engine-line engine-line--best">
           <span class="engine-line__label">Best:</span>
           <span class="engine-line__move">
-            <!-- This is what was crashing! It is now protected by the wrapper -->
             <Figurine san={currentMove.bestMoveSan} />
           </span>
           <span class="engine-line__eval">
-            {formatEval(currentMove.prevBestEval ?? 0)}
+            {formatEval(currentMove.prevBestEval ?? 0, currentMove.bestMateIn)}
           </span>
         </div>
       {/if}
