@@ -4,8 +4,7 @@ use crate::heuristics::classify::{
     classify, ClassifyArgs,
 };
 use crate::heuristics::see::{
-    get_target_square,
-    is_losing_significant_material, is_sacrifice,
+    get_target_square, is_material_sacrifice,
 };
 
 use crate::data::pgn::PgnVisitor;
@@ -245,7 +244,7 @@ pub fn run_analysis_pipeline(
     };
 
     for (san, fen, _uci) in positions {
-        // Perspective flags for rigorous normalization
+        // Perspective flags for normalization
         let is_white_moving = ply_count % 2 != 0;
         let is_white_to_move_after_play =
             !is_white_moving;
@@ -271,7 +270,7 @@ pub fn run_analysis_pipeline(
                     .ok()
                 });
 
-        // Fast checks: Evaluate book and forced moves before hitting the engine
+        // Fast checks to evaluate book and forced moves before hitting the engine
         let is_forced_move = prev_pos
             .as_ref()
             .map(|pos| {
@@ -341,7 +340,7 @@ pub fn run_analysis_pipeline(
             &go_cmd,
         );
 
-        // Normalize evaluations rigorously to Absolute White POV
+        // Normalize evaluations
         let mut played_cp =
             extract_cp(&played_eval);
         let mut normalized_cp =
@@ -471,7 +470,6 @@ pub fn run_analysis_pipeline(
                 )
             });
 
-        // Let `evaluate_move_context` handle shifting Absolute to Moving Player POV
         let (classification, current_win_loss) =
             evaluate_move_context(
                 &san,
@@ -486,8 +484,10 @@ pub fn run_analysis_pipeline(
                 ply_count,
                 is_book_flag,
                 is_forced_move,
-                prev_best_mate, // best-move mate from the previous position (White POV)
-                class_played_mate, // mate from the played move (White POV)
+                prev_best_mate, 
+                // best-move mate from the previous position (White POV)
+                class_played_mate, 
+                // mate from the played move (White POV)
             );
 
         let positive_loss =
@@ -605,13 +605,12 @@ pub fn run_analysis_pipeline(
         app.emit("analysis-progress", progress)
             .map_err(|e| e.to_string())?;
 
-        // ── Advance state for the next ply ────────────────────────────────────
-        // `prev_best_mate` must come from the *best-move analysis* of the
+        // `prev_best_mate` must come from the best-move analysis of the
         // current position (i.e. what the opponent will face), which is the
-        // evaluation Stockfish just returned for `current_pos_cmd` — that is
+        // evaluation Stockfish just returned for `current_pos_cmd` and that is
         // `played_eval` negated into White POV from the opponent's side.
         // The engine returns scores relative to the side to move, so after
-        // the played move it is the *opponent's* turn; we negate to stay in
+        // the played move it is the opponent's turn; we negate to stay in
         // Absolute White POV before storing.
         prev_best_mate =
             extract_mate(&played_eval).map(|m| {
@@ -764,10 +763,9 @@ fn evaluate_move_context(
             } else {
                 shakmaty::Color::Black
             };
-            is_sacrifice(prev, mv)
-                && is_losing_significant_material(
-                    current, color,
-                )
+            is_material_sacrifice(
+                prev, current, mv, color,
+            )
         }
         _ => false,
     };
