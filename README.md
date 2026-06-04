@@ -1,7 +1,12 @@
-# Tauri + SvelteKit + TypeScript
+## chess-game-reviewer
 
-This template should help get you started developing with Tauri, SvelteKit and TypeScript in Vite.
+Creating a game review tool inspired by chess.com game review, but its free and local in a desktop app
 
-## Recommended IDE Setup
+- import games from chess.com and lichess, or just paste a pgn.
+- summarizes accuracy scores
+- classifies moves (Best, Excellent, Good, Inaccuracy, Mistake, Blunder, Miss, etc.)
+- evaluates positions using Stockfish UCI binary that runs natively on the machine.
 
-[VS Code](https://code.visualstudio.com/) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer).
+<img src="doc/game.png" alt="Description of the image" width="800">
+
+<img src="doc/summary.png" alt="Description of the image" width="800">
