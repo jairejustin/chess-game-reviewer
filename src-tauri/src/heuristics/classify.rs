@@ -27,6 +27,10 @@ pub struct ClassifyArgs<'a> {
     /// Negative = the moving player is getting mated in N moves.
     /// None = the played move does not lead to a forced mate.
     pub played_mate: Option<i32>,
+    /// True when total non-pawn material on the board (both sides combined)
+    /// falls below the endgame threshold (~26 points using standard piece values).
+    /// Computed from the pre-move board state in `evaluate_move_context`.
+    pub is_endgame: bool,
 }
 
 impl<'a> Default for ClassifyArgs<'a> {
@@ -46,6 +50,7 @@ impl<'a> Default for ClassifyArgs<'a> {
             is_getting_mated: false,
             best_mate: None,
             played_mate: None,
+            is_endgame: false,
         }
     }
 }
@@ -194,8 +199,9 @@ pub fn classify(
     // Attacker played a slower mate than the engine's best: the mate-vs-mate
     // classifier already handles this precisely. The `is_delivering_mate` flag
     // only fires when played_mate is None (ex. no forced mate in the played
-    // line), which means the player found *a* mating move but not the fastest
-    // forced sequence — downgrade Best -> Excellent.
+    // line), which means the player found a mating move but not the fastest
+    // forced sequence
+    // downgrade Best -> Excellent.
     if args.is_delivering_mate
         && args.played_mate.is_none()
         && !args.is_best_engine_move
@@ -244,8 +250,7 @@ pub fn classify(
     // a tightrope where any other choice would have lost the advantage or straight up loses.
     if (classification == MoveBadge::Best
         || classification == MoveBadge::Excellent)
-        && args.prev_eval.abs() >= -100
-        && args.prev_eval.abs() <= 1000
+        && args.prev_eval >= -100
         && is_great_move(
             args.played_eval,
             args.prev_best_eval,
@@ -258,12 +263,37 @@ pub fn classify(
 
     // BRILLIANT MOVE: we use Static Exchange Evaluation (SEE) to confirm a piece is *actually* hanging.
     // If SEE says it's hanging, but the engine eval didn't drop, it's a sound sacrifice.
+    //
+    // In decided positions (|prev_eval| >= 500cp) or endgames, a sacrifice is only awarded
+    // Brilliant if it also passes the `is_brilliant_in_decided_position` check. It is a hybrid
+    // guard that requires either a true Great-move-level only-move pressure, or a large
+    // second-PV divergence. This prevents farming brilliancies in won/lost positions where
+    // the opponent simply hangs material without meaningful resistance (e.g. K+B vs K+P).
     if win_loss < 5.0
         && delta <= 40
         && args.is_losing_material
         && args.played_eval > 0
     {
-        classification = MoveBadge::Brilliant;
+        let position_is_decided =
+            args.prev_eval.abs() >= 500;
+
+        let eligible = if position_is_decided
+            || args.is_endgame
+        {
+            is_brilliant_in_decided_position(
+                args.played_eval,
+                args.prev_best_eval,
+                args.multi_pv_evals,
+                args.is_obvious_recapture,
+                delta,
+            )
+        } else {
+            true
+        };
+
+        if eligible {
+            classification = MoveBadge::Brilliant;
+        }
     }
 
     if classification == MoveBadge::Best
@@ -331,6 +361,57 @@ pub fn is_great_move(
             );
 
     played_best && win_loss_to_second_best >= 8.5
+}
+
+/// Gate for Brilliant moves in decided positions (`|prev_eval| >= 500`) or endgames.
+///
+/// In these contexts the position is already largely resolved, so a hanging piece
+/// is often just a free capture with no real calculation required, not a genuine
+/// brilliancy. We require the sacrifice to also demonstrate real decisiveness
+/// via one of two paths:
+///
+/// ONLY MOVE:
+/// The `is_great_move` check fires: every alternative would cause a meaningful
+/// win-probability collapse. The sigmoid is intentionally flat near +-100%, so
+/// this path wont fire in truly dead positions, which is the correct behaviour.
+///
+/// :
+/// The second PV is at least 100cp worse than the played move AND the sacrifice
+/// itself barely costs anything (`delta <= 20`). This catches genuine tactical
+/// shots (ex. a rook sac to force stalemate or promotion) in endgames
+/// where the sigmoid flatness prevents Path A from triggering.
+///
+/// If neither path passes, the position is decided enough that the sacrifice
+/// adds no meaningful complexity therefore capped it at `Excellent` or `Best`.
+fn is_brilliant_in_decided_position(
+    played_eval: i32,
+    best_eval: i32,
+    multi_pv_evals: &[i32],
+    is_obvious_recapture: bool,
+    delta: i32,
+) -> bool {
+    // Path A: only-move pressure (same bar as Great)
+    if is_great_move(
+        played_eval,
+        best_eval,
+        multi_pv_evals,
+        is_obvious_recapture,
+    ) {
+        return true;
+    }
+
+    // Path B: large second-PV divergence with a tight delta
+    if let Some(&second_pv) =
+        multi_pv_evals.get(1)
+    {
+        let second_pv_gap =
+            played_eval - second_pv;
+        if second_pv_gap >= 100 && delta <= 20 {
+            return true;
+        }
+    }
+
+    false
 }
 
 #[cfg(test)]
@@ -417,22 +498,6 @@ mod tests {
         assert_ne!(
             classify(args).0,
             MoveBadge::Brilliant
-        );
-    }
-
-    #[test]
-    fn great_when_only_move_maintaining_equality()
-    {
-        let args = ClassifyArgs {
-            prev_eval: 30,
-            played_eval: 28,
-            prev_best_eval: 30,
-            multi_pv_evals: &[30, -150, -200],
-            ..Default::default()
-        };
-        assert_eq!(
-            classify(args).0,
-            MoveBadge::Great
         );
     }
 

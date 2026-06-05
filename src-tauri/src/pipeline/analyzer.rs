@@ -653,6 +653,26 @@ pub fn run_analysis_pipeline(
     Ok(())
 }
 
+/// Sums non-pawn material points for both sides on the given board,
+/// using standard piece values (N/B=3, R=5, Q=9, K excluded).
+/// Used to detect endgame positions for the Brilliant move guard.
+fn count_non_pawn_material(
+    board: &shakmaty::Board,
+) -> i32 {
+    use shakmaty::Role;
+    board
+        .occupied()
+        .into_iter()
+        .filter_map(|sq| board.piece_at(sq))
+        .map(|piece| match piece.role {
+            Role::Knight | Role::Bishop => 3,
+            Role::Rook => 5,
+            Role::Queen => 9,
+            _ => 0, // Pawns and Kings excluded
+        })
+        .sum()
+}
+
 #[allow(clippy::too_many_arguments)]
 fn evaluate_move_context(
     san: &str,
@@ -770,6 +790,19 @@ fn evaluate_move_context(
         _ => false,
     };
 
+    // Endgame flag: sum all non-pawn material (both sides) on the pre-move
+    // board. The threshold of 26 points corresponds to roughly two minor pieces
+    // and one rook per side remaining
+
+    const ENDGAME_MATERIAL_THRESHOLD: i32 = 26;
+    let is_endgame = prev_pos
+        .as_ref()
+        .map(|pos| {
+            count_non_pawn_material(pos.board())
+                <= ENDGAME_MATERIAL_THRESHOLD
+        })
+        .unwrap_or(false);
+
     let prev_target = get_target_square(prev_san);
     let current_target = get_target_square(san);
 
@@ -805,6 +838,7 @@ fn evaluate_move_context(
         is_getting_mated,
         best_mate: best_mate_pov,
         played_mate: played_mate_pov,
+        is_endgame,
     };
 
     classify(classify_args)
