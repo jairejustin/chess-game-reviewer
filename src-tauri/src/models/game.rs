@@ -37,7 +37,7 @@ pub struct AnalyzedMove {
 
 /// An aggregated tally tracking the total number of each
 /// classification badge awarded during the game.
-#[derive(Serialize)]
+#[derive(Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct MoveCounts {
     pub brilliant: u32,
@@ -51,6 +51,35 @@ pub struct MoveCounts {
     pub miss: u32,
     pub book: u32,
     pub forced: u32,
+}
+
+impl MoveCounts {
+    /// Increments the counter for the given badge.
+    pub fn tally(&mut self, badge: &MoveBadge) {
+        match badge {
+            MoveBadge::Brilliant => {
+                self.brilliant += 1
+            }
+            MoveBadge::Great => self.great += 1,
+            MoveBadge::Best => self.best += 1,
+            MoveBadge::Excellent => {
+                self.excellent += 1
+            }
+            MoveBadge::Good => self.good += 1,
+            MoveBadge::Inaccuracy => {
+                self.inaccuracy += 1
+            }
+            MoveBadge::Mistake => {
+                self.mistake += 1
+            }
+            MoveBadge::Blunder => {
+                self.blunder += 1
+            }
+            MoveBadge::Miss => self.miss += 1,
+            MoveBadge::Book => self.book += 1,
+            MoveBadge::Forced => self.forced += 1,
+        }
+    }
 }
 
 /// The parsed PGN header information including the players,
@@ -79,7 +108,7 @@ pub struct AnalysisSummary {
     pub moves: Vec<AnalyzedMove>,
 }
 
-// Analysis progress
+/// Analysis progress event emitted once per ply.
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalysisProgress {
