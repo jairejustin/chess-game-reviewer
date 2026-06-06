@@ -115,3 +115,86 @@ pub struct AnalysisProgress {
     pub current_ply: u32,
     pub total_plies: u32,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_move_counts_are_all_zero() {
+        let counts = MoveCounts::default();
+        assert_eq!(counts.brilliant, 0);
+        assert_eq!(counts.great, 0);
+        assert_eq!(counts.best, 0);
+        assert_eq!(counts.excellent, 0);
+        assert_eq!(counts.good, 0);
+        assert_eq!(counts.inaccuracy, 0);
+        assert_eq!(counts.mistake, 0);
+        assert_eq!(counts.blunder, 0);
+        assert_eq!(counts.miss, 0);
+        assert_eq!(counts.book, 0);
+        assert_eq!(counts.forced, 0);
+    }
+
+    #[test]
+    fn tally_increments_correct_field_for_each_badge(
+    ) {
+        let badges = [
+            (MoveBadge::Brilliant, "brilliant"),
+            (MoveBadge::Great, "great"),
+            (MoveBadge::Best, "best"),
+            (MoveBadge::Excellent, "excellent"),
+            (MoveBadge::Good, "good"),
+            (MoveBadge::Inaccuracy, "inaccuracy"),
+            (MoveBadge::Mistake, "mistake"),
+            (MoveBadge::Blunder, "blunder"),
+            (MoveBadge::Miss, "miss"),
+            (MoveBadge::Book, "book"),
+            (MoveBadge::Forced, "forced"),
+        ];
+
+        for (badge, label) in badges {
+            let mut counts =
+                MoveCounts::default();
+            counts.tally(&badge);
+
+            // Only the tallied field should be 1;
+            // every other field must remain 0.
+            let total = counts.brilliant
+                + counts.great
+                + counts.best
+                + counts.excellent
+                + counts.good
+                + counts.inaccuracy
+                + counts.mistake
+                + counts.blunder
+                + counts.miss
+                + counts.book
+                + counts.forced;
+
+            assert_eq!(
+                total, 1,
+                "{} tally incremented more than one field",
+                label
+            );
+        }
+    }
+
+    #[test]
+    fn tally_accumulates_across_multiple_calls() {
+        let mut counts = MoveCounts::default();
+
+        counts.tally(&MoveBadge::Blunder);
+        counts.tally(&MoveBadge::Blunder);
+        counts.tally(&MoveBadge::Mistake);
+        counts.tally(&MoveBadge::Best);
+
+        assert_eq!(counts.blunder, 2);
+        assert_eq!(counts.mistake, 1);
+        assert_eq!(counts.best, 1);
+
+        // Everything else untouched
+        assert_eq!(counts.brilliant, 0);
+        assert_eq!(counts.great, 0);
+    }
+}

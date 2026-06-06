@@ -148,36 +148,30 @@ pub fn is_material_sacrifice(
             // does the moving player have an immediate counter-threat of equal
             // or greater value? If so, the opponent can't safely take.
             // This is a tempo/counter-attack move, not a real sacrifice.
-            if let Some(capture) =
-                cheapest_capture(
-                    post_move_pos,
-                    sq,
-                )
+            let capture = cheapest_capture(
+                post_move_pos,
+                sq,
+            )
+            .unwrap();
+            let danger_pos = post_move_pos
+                .clone()
+                .play(capture)
+                .unwrap();
+
+            let counter_threat =
+                best_counter_threat(
+                    &danger_pos,
+                    !color,
+                );
+            let hanging_piece_val = pre_move_pos
+                .board()
+                .piece_at(sq)
+                .map(|p| piece_value(p.role))
+                .unwrap_or(see_after);
+
+            if counter_threat >= hanging_piece_val
             {
-                let danger_pos = post_move_pos
-                    .clone()
-                    .play(capture)
-                    .unwrap();
-
-                let counter_threat =
-                    best_counter_threat(
-                        &danger_pos,
-                        !color,
-                    );
-                let hanging_piece_val =
-                    pre_move_pos
-                        .board()
-                        .piece_at(sq)
-                        .map(|p| {
-                            piece_value(p.role)
-                        })
-                        .unwrap_or(see_after);
-
-                if counter_threat
-                    >= hanging_piece_val
-                {
-                    continue;
-                }
+                continue;
             }
 
             return true;
@@ -221,6 +215,14 @@ mod tests {
     use shakmaty::fen::Fen;
     use shakmaty::san::San;
     use shakmaty::CastlingMode;
+
+    #[test]
+    fn test_get_target_square_invalid_san() {
+        assert_eq!(
+            get_target_square("not_a_chess_move"),
+            None
+        );
+    }
 
     #[test]
     fn test_get_target_square_parsing() {

@@ -110,7 +110,7 @@ impl Visitor for PgnVisitor {
                 .board
                 .clone()
                 .play(m)
-                .unwrap();
+                .expect(""); // san_plus.san.to_move(&self.board) already validated this
 
             let fen = Fen::from_position(
                 &self.board.clone(),
@@ -142,6 +142,50 @@ mod tests {
     use pgn_reader::Reader;
     use std::io::Cursor;
 
+    #[test]
+    fn ignores_illegal_moves_in_san() {
+        let pgn = "1. Qxf7#"; // ChatGPT ahh move
+        let mut visitor = PgnVisitor::new();
+        let mut reader = Reader::new(
+            Cursor::new(pgn.as_bytes()),
+        );
+
+        let positions = reader
+            .read_game(&mut visitor)
+            .unwrap()
+            .unwrap()
+            .1;
+
+        // Because the move fails `to_move`, it skips the push, leaving 0 positions.
+        assert_eq!(positions.len(), 0);
+    }
+
+    #[test]
+    fn ignores_invalid_utf8_tags() {
+        use pgn_reader::Reader;
+        use std::io::Cursor;
+
+        let mut visitor = PgnVisitor::new();
+
+        let mut pgn_bytes = b"[White \"".to_vec();
+        pgn_bytes.push(0xFF);
+        pgn_bytes.extend_from_slice(b"\"]\n");
+
+        pgn_bytes.push(b'[');
+        pgn_bytes.push(0xFF);
+        pgn_bytes.extend_from_slice(
+            b" \"Magnus Carlsen\"]\n\n1. e4",
+        );
+
+        let mut reader =
+            Reader::new(Cursor::new(pgn_bytes));
+        let _ = reader.read_game(&mut visitor);
+
+        assert_eq!(
+            visitor.metadata.white,
+            "Unknown"
+        );
+    }
     #[test]
     fn parses_four_move_game_into_correct_position_count(
     ) {
@@ -213,5 +257,40 @@ mod tests {
             "Hikaru Nakamura"
         );
         assert_eq!(metadata.result, "1/2-1/2");
+    }
+
+    #[test]
+    fn parses_full_metadata_and_ignores_unknown_tags(
+    ) {
+        // Added Date, Event, and an unrecognized "Site" tag
+        let pgn = "[White \"Magnus Carlsen\"]\n[Black \"Hikaru Nakamura\"]\n[Result \"1/2-1/2\"]\n[Date \"2023.12.01\"]\n[Event \"Champions Chess Tour\"]\n[Site \"Toronto, CAN\"]\n\n1. e4 e5";
+
+        let mut visitor = PgnVisitor::new();
+        let mut reader = Reader::new(
+            Cursor::new(pgn.as_bytes()),
+        );
+        let metadata = reader
+            .read_game(&mut visitor)
+            .unwrap()
+            .unwrap()
+            .0;
+
+        assert_eq!(
+            metadata.white,
+            "Magnus Carlsen"
+        );
+        assert_eq!(
+            metadata.black,
+            "Hikaru Nakamura"
+        );
+        assert_eq!(metadata.result, "1/2-1/2");
+        assert_eq!(metadata.date, "2023.12.01");
+        assert_eq!(
+            metadata.event,
+            Some(
+                "Champions Chess Tour"
+                    .to_string()
+            )
+        );
     }
 }

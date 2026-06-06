@@ -299,3 +299,73 @@ pub async fn fetch_chesscom_games(
         cursor: next_cursor,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_normalize_result_mappings() {
+        // Test White Win conditions
+        assert_eq!(
+            normalize_result("win", "timeout"),
+            (
+                "1-0".to_string(),
+                "1-0".to_string(),
+                "1-0".to_string()
+            )
+        );
+        assert_eq!(
+            normalize_result("win", "resigned"),
+            (
+                "1-0".to_string(),
+                "1-0".to_string(),
+                "1-0".to_string()
+            )
+        );
+
+        // Symmetrical Draw condition
+        assert_eq!(
+            normalize_result(
+                "repetition",
+                "repetition"
+            ),
+            (
+                "1/2-1/2".to_string(),
+                "1/2-1/2".to_string(),
+                "1/2-1/2".to_string()
+            )
+        );
+
+        // Asymmetrical Draw condition (Insufficient vs Timeout)
+        assert_eq!(
+            normalize_result(
+                "insufficient",
+                "timeout"
+            ),
+            (
+                "1/2-1/2".to_string(),
+                "1-0".to_string(),
+                "1/2-1/2".to_string()
+            )
+        );
+
+        // Test Black Win conditions
+        assert_eq!(
+            normalize_result("checkmated", "win"),
+            (
+                "0-1".to_string(),
+                "0-1".to_string(),
+                "0-1".to_string()
+            )
+        );
+        assert_eq!(
+            normalize_result("timeout", "win"),
+            (
+                "0-1".to_string(),
+                "0-1".to_string(),
+                "0-1".to_string()
+            )
+        );
+    }
+}

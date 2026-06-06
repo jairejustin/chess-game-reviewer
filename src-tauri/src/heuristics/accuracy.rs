@@ -59,6 +59,10 @@ mod tests {
     #[test]
     fn test_accuracy_curve() {
         assert_eq!(
+            calculate_accuracy(0.0, 0),
+            100.0
+        );
+        assert_eq!(
             calculate_accuracy(0.0, 40),
             100.0
         );
