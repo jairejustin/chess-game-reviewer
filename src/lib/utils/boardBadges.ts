@@ -1,5 +1,9 @@
 import type { MoveBadge } from '../types/game';
 
+const BADGE_RADIUS = 20;
+const ICON_SIZE = 28;
+const FONT_SIZE = 30;
+
 export const badgeColors: Record<MoveBadge, string> = {
   brilliant: '#1baca6',
   great: '#5c8bb0',
@@ -28,6 +32,11 @@ export function getInBoardBadge(classification: MoveBadge): string {
   const color = badgeColors[classification];
   let innerMarkup = '';
 
+  // Auto-calculating offsets to keep elements perfectly centered
+  const center = BADGE_RADIUS;
+  const iconOffset = BADGE_RADIUS - ICON_SIZE / 2;
+  const textOffset = BADGE_RADIUS + 2; // Slight downward offset for font baseline
+
   const textBadges = {
     brilliant: '!!',
     great: '!',
@@ -38,7 +47,7 @@ export function getInBoardBadge(classification: MoveBadge): string {
 
   if (classification in textBadges) {
     innerMarkup = `
-      <text x="17" y="19" fill="#fff" font-family="Outfit, sans-serif" font-weight="900" font-size="21" text-anchor="middle" dominant-baseline="middle" letter-spacing="-1">
+      <text x="${center}" y="${textOffset}" fill="#fff" font-family="Outfit, sans-serif" font-weight="900" font-size="${FONT_SIZE}" text-anchor="middle" dominant-baseline="middle" letter-spacing="-0.1">
         ${textBadges[classification as keyof typeof textBadges]}
       </text>`;
   } else {
@@ -47,15 +56,15 @@ export function getInBoardBadge(classification: MoveBadge): string {
     const strokeWidth = strokeOnly ? '4' : '0';
 
     innerMarkup = `
-      <svg x="7" y="7" width="20" height="20" viewBox="0 0 24 24" fill="${fill}" stroke="#fff" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round">
+      <svg x="${iconOffset}" y="${iconOffset}" width="${ICON_SIZE}" height="${ICON_SIZE}" viewBox="0 0 24 24" fill="${fill}" stroke="#fff" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round">
         ${svgPaths[classification as keyof typeof svgPaths]}
       </svg>`;
   }
 
   return `
-    <g transform="translate(70, -5)">
-      <g class="badge-anim" style="transform-origin: 17px 17px;">
-        <circle cx="17" cy="17" r="17" fill="${color}" stroke="#1e1e1e" stroke-width="1" />
+    <g transform="translate(75, -10)">
+      <g class="badge-anim" style="transform-origin: ${center}px ${center}px;">
+        <circle cx="${center}" cy="${center}" r="${BADGE_RADIUS}" fill="${color}" stroke="#1e1e1e" stroke-width="1" />
         ${innerMarkup}
       </g>
     </g>
