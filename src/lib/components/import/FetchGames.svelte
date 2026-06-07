@@ -10,7 +10,7 @@
     hasMore,
     fetchGames,
     loadMore
-  } from '../store/fetchStore';
+  } from '$lib/stores/fetchStore';
 
   import Loader2 from 'lucide-svelte/icons/loader-2';
 
@@ -128,7 +128,10 @@
       <div class="profile-strip">
         <div class="profile-strip__avatar">
           {#if $fetchedProfile.avatarUrl}
-            <img src={$fetchedProfile.avatarUrl} alt={$fetchedProfile.username} />
+            <img
+              src={$fetchedProfile.avatarUrl}
+              alt={$fetchedProfile.username}
+            />
           {:else}
             <div class="profile-strip__avatar-fallback">
               {$fetchedProfile.username.charAt(0).toUpperCase()}
@@ -142,7 +145,9 @@
           <span class="profile-strip__name">{$fetchedProfile.username}</span>
           <div class="profile-strip__meta">
             {#if $fetchedProfile.countryCode}
-              <span class="profile-strip__tag">{$fetchedProfile.countryCode}</span>
+              <span class="profile-strip__tag"
+                >{$fetchedProfile.countryCode}</span
+              >
             {/if}
           </div>
         </div>
@@ -220,7 +225,6 @@
         {/if}
       </div>
     {/if}
-
   {:else}
     <div class="paste-section">
       <textarea
@@ -240,7 +244,6 @@
 </div>
 
 <style>
-
   .fetch-games {
     padding: 1.25rem;
     display: flex;
@@ -522,7 +525,7 @@
     outline: none;
     transition: border-color 0.2s;
   }
-  
+
   .pgn-textarea:focus {
     border-color: #555;
   }

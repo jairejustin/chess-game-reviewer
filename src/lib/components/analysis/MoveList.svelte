@@ -1,16 +1,15 @@
 <script lang="ts">
-  import { moves, activePly, isAnalyzing } from '../store/gameStore';
-  import { formatEval } from '../utils/ui';
-  import Badge from './Badge.svelte';
-
+  import { moves, activePly } from '$lib/stores/boardStore';
+  import { isAnalyzing } from '$lib/stores/reviewStore';
+  import { formatEval } from '$lib/utils/ui';
+  import Badge from '$lib/components/ui/Badge.svelte';
+  import Figurine from '$lib/components/ui/Figurine.svelte';
   import Loader2 from 'lucide-svelte/icons/loader-2';
-  import Figurine from './Figurine.svelte';
 
   function autoScroll(node: HTMLElement, isActive: boolean) {
     if (isActive) {
       node.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
-
     return {
       update(newIsActive: boolean) {
         if (newIsActive) {

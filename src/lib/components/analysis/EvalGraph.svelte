@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { moves, activePly } from '../store/gameStore';
+  import { moves, activePly } from '$lib/stores/boardStore';
 
   function winPercent(cp: number, mateIn: number | null): number {
     if (mateIn !== null) {
@@ -13,7 +13,9 @@
 
   $: points = $moves.map((m, i) => {
     const x = $moves.length > 1 ? (i / ($moves.length - 1)) * 100 : 0;
-    const y = 100 - winPercent(m.playedEval, m.mateIn);
+    const evalCp = m.playedEval ?? 0;
+    const evalMate = m.mateIn ?? null;
+    const y = 100 - winPercent(evalCp, evalMate);
     return { x, y };
   });
 

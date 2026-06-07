@@ -1,25 +1,14 @@
 import { writable, derived } from 'svelte/store';
-import type {
-  AnalyzedMove,
-  AnalysisSummary,
-  AnalysisProgress
-} from '../types/game';
 import { listen } from '@tauri-apps/api/event';
+import { moves, activePly, resetBoard } from './boardStore';
+import type { AnalysisSummary, AnalysisProgress } from '../types/game';
 
 export type SidebarView = 'import' | 'game' | 'summary';
 
-export const moves = writable<AnalyzedMove[]>([]);
-export const activePly = writable<number>(0);
 export const isAnalyzing = writable<boolean>(false);
 export const analysisSummary = writable<AnalysisSummary | null>(null);
 export const loadingProgress = writable<number>(0);
 export const sidebarView = writable<SidebarView>('import');
-export const isFlipped = writable<boolean>(false);
-
-export const currentFen = derived(
-  [moves, activePly],
-  ([$moves, $activePly]) => $moves[$activePly]?.fen ?? 'start'
-);
 
 export const currentEval = derived(
   [moves, activePly],
@@ -31,24 +20,16 @@ export const currentMateIn = derived(
   ([$moves, $activePly]) => $moves[$activePly]?.mateIn ?? null
 );
 
-export const appendMove = (move: AnalyzedMove) => {
-  moves.update((m) => {
-    if (m.some((existing) => existing.ply === move.ply)) return m;
-    return [...m, move];
-  });
-};
-
-export const resetGame = () => {
-  moves.set([]);
-  activePly.set(0);
+export const resetAnalysis = () => {
+  resetBoard();
   isAnalyzing.set(false);
   analysisSummary.set(null);
   loadingProgress.set(0);
 };
 
-export async function initTauriListeners() {
+export async function initAnalysisListeners() {
   await listen('analysis-started', () => {
-    resetGame();
+    resetAnalysis();
     isAnalyzing.set(true);
   });
 
@@ -63,17 +44,15 @@ export async function initTauriListeners() {
     isAnalyzing.set(false);
     analysisSummary.set(event.payload);
     moves.set(event.payload.moves);
-
     if (event.payload.moves.length > 0) {
       activePly.set(event.payload.moves.length - 1);
     }
-
     loadingProgress.set(1);
     sidebarView.set('summary');
   });
 
   await listen<string>('analysis-error', (event) => {
-    console.error('[Theoria engine error]', event.payload);
+    console.error('[Engine error]', event.payload);
     isAnalyzing.set(false);
   });
 }

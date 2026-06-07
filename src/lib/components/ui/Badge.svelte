@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { MoveBadge } from '../types/game';
+  import type { MoveBadge } from '$lib/types/game';
 
   import Star from 'lucide-svelte/icons/star';
   import ThumbsUp from 'lucide-svelte/icons/thumbs-up';

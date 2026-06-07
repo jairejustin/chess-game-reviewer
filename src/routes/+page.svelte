@@ -3,63 +3,33 @@
   import { invoke } from '@tauri-apps/api/core';
   import Cpu from 'lucide-svelte/icons/cpu';
 
-  import { chessground } from '../actions/chessground';
+  // Stores
+  import { selectedGame, fetchedProfile } from '$lib/stores/fetchStore';
+  import { moves, activePly, isFlipped } from '$lib/stores/boardStore';
   import {
-    moves,
-    activePly,
-    currentFen,
-    initTauriListeners,
+    sidebarView,
     isAnalyzing,
     loadingProgress,
-    sidebarView,
     analysisSummary,
-    isFlipped
-  } from '../store/gameStore';
-  import { selectedGame, fetchedProfile } from '../store/fetchStore';
-  import { getInBoardBadge, badgeColors } from '../utils/boardBadges';
+    initAnalysisListeners
+  } from '$lib/stores/reviewStore';
 
-  import EvalBar from '../components/EvalBar.svelte';
-  import BoardControls from '../components/BoardControls.svelte';
-  import EngineFeedback from '../components/EngineFeedback.svelte';
-  import MoveList from '../components/MoveList.svelte';
-  import GameSummary from '../components/GameSummary.svelte';
-  import FetchGames from '../components/FetchGames.svelte';
-  import PlayerProfile from '../components/PlayerProfile.svelte';
-  import AnalysisLoading from '../components/AnalysisLoading.svelte';
+  // Components
+  import ChessBoard from '$lib/components/board/ChessBoard.svelte';
+  import BoardControls from '$lib/components/board/BoardControls.svelte';
+  import FetchGames from '$lib/components/import/FetchGames.svelte';
+  import EngineFeedback from '$lib/components/analysis/EngineFeedback.svelte';
+  import MoveList from '$lib/components/analysis/MoveList.svelte';
+  import GameSummary from '$lib/components/analysis/GameSummary.svelte';
+  import AnalysisLoading from '$lib/components/ui/AnalysisLoading.svelte';
 
-  import '@lichess-org/chessground/assets/chessground.base.css';
-  import '@lichess-org/chessground/assets/chessground.brown.css';
-  import '@lichess-org/chessground/assets/chessground.cburnett.css';
-
-  // @ts-ignore
-  import '@fontsource/bebas-neue';
-  // @ts-ignore
-  import '@fontsource-variable/outfit';
-
-  import { calculateMaterial } from '../utils/material';
-  $: material = calculateMaterial($currentFen || 'start');
-
-  let destHighlight = 'rgba(155, 199, 0, 0.41)';
-  let cgConfig: any = { fen: 'start', viewOnly: true };
   let opponentProfile: any = null;
 
-  // Helper to load preview moves sequence
   async function loadPreview(pgn: string) {
     try {
       const previewMoves: any[] = await invoke('parse_pgn', { pgn });
-
-      $analysisSummary = null; // Flush out older engine state reports
-
-      $moves = [
-        {
-          ply: 0,
-          san: '',
-          fen: 'start',
-          uci: ''
-        },
-        ...previewMoves
-      ];
-
+      $analysisSummary = null;
+      $moves = [{ ply: 0, san: '', fen: 'start', uci: '' }, ...previewMoves];
       $activePly = $moves.length - 1;
       $sidebarView = 'game';
     } catch (err) {
@@ -67,7 +37,7 @@
     }
   }
 
-  // Handle dynamic side re-orientations and trigger background preview fetching
+  // Handle board orientation and fetch the opponent's profile
   let processedGameId: string | null = null;
   $: if ($selectedGame && $selectedGame.id !== processedGameId) {
     processedGameId = $selectedGame.id;
@@ -77,16 +47,16 @@
       const blackLower = $selectedGame.black.username.toLowerCase();
       $isFlipped = blackLower === userLower;
 
-      // Lazy load opponent data
       const opponentName = $isFlipped
         ? $selectedGame.white.username
         : $selectedGame.black.username;
+
       invoke('get_player_profile', { username: opponentName })
         .then((profile) => {
           opponentProfile = profile;
         })
         .catch((err) => {
-          console.error('Failed to lazy load opponent context profile:', err);
+          console.error('Failed to load opponent context profile:', err);
           opponentProfile = null;
         });
     } else {
@@ -97,32 +67,15 @@
     loadPreview($selectedGame.pgn);
   }
 
-  // Core Profile Base Metadata Properties Setup
-  $: blackName =
-    $analysisSummary?.metadata.black ??
-    $selectedGame?.black.username ??
-    'Opponent';
+  // Dynamically map avatars and titles to the correct colors
   $: whiteName =
     $analysisSummary?.metadata.white ??
     $selectedGame?.white.username ??
-    'Player';
-
-  $: blackTitle = ($fetchedProfile && blackName.toLowerCase() === $fetchedProfile.username.toLowerCase()) 
-    ? $fetchedProfile.title 
-    : opponentProfile?.title;
-
-  $: whiteTitle = ($fetchedProfile && whiteName.toLowerCase() === $fetchedProfile.username.toLowerCase()) 
-    ? $fetchedProfile.title 
-    : opponentProfile?.title;
-
-  $: blackRating = $selectedGame?.black.rating ?? null;
-  $: whiteRating = $selectedGame?.white.rating ?? null;
-
-  $: blackAvatar =
-    $fetchedProfile &&
-    blackName.toLowerCase() === $fetchedProfile.username.toLowerCase()
-      ? $fetchedProfile.avatarUrl
-      : opponentProfile?.avatarUrl;
+    'White';
+  $: blackName =
+    $analysisSummary?.metadata.black ??
+    $selectedGame?.black.username ??
+    'Black';
 
   $: whiteAvatar =
     $fetchedProfile &&
@@ -130,77 +83,23 @@
       ? $fetchedProfile.avatarUrl
       : opponentProfile?.avatarUrl;
 
-  // Map values across layout rows dynamically tracking active $isFlipped configuration
-  $: topName = $isFlipped ? whiteName : blackName;
-  $: bottomName = $isFlipped ? blackName : whiteName;
+  $: blackAvatar =
+    $fetchedProfile &&
+    blackName.toLowerCase() === $fetchedProfile.username.toLowerCase()
+      ? $fetchedProfile.avatarUrl
+      : opponentProfile?.avatarUrl;
 
-  $: topRating = $isFlipped ? whiteRating : blackRating;
-  $: bottomRating = $isFlipped ? blackRating : whiteRating;
+  $: whiteTitle =
+    $fetchedProfile &&
+    whiteName.toLowerCase() === $fetchedProfile.username.toLowerCase()
+      ? $fetchedProfile.title
+      : opponentProfile?.title;
 
-  $: topAvatar = $isFlipped ? whiteAvatar : blackAvatar;
-  $: bottomAvatar = $isFlipped ? blackAvatar : whiteAvatar;
-
-  $: topCaptured = $isFlipped ? material.whiteCaptured : material.blackCaptured;
-  $: bottomCaptured = $isFlipped
-    ? material.blackCaptured
-    : material.whiteCaptured;
-
-  $: topAdvantage = $isFlipped
-    ? material.whiteAdvantage
-    : material.blackAdvantage;
-  $: bottomAdvantage = $isFlipped
-    ? material.blackAdvantage
-    : material.whiteAdvantage;
-
-  $: topTitle = $isFlipped ? whiteTitle : blackTitle;
-  $: bottomTitle = $isFlipped ? blackTitle : whiteTitle;
-
-  // Update Chessground layout configuration settings engine parameters
-  $: {
-    const move = $moves[$activePly];
-    let autoShapes: any[] = [];
-    let lastMove: string[] = [];
-    destHighlight = 'rgba(155, 199, 0, 0.41)';
-
-    if (
-      move &&
-      move.ply > 0 &&
-      typeof move.uci === 'string' &&
-      move.uci.length >= 4
-    ) {
-      const orig = move.uci.substring(0, 2);
-      const dest = move.uci.substring(2, 4);
-      lastMove = [orig, dest];
-
-      if (move.classification) {
-        destHighlight = badgeColors[move.classification] + '66';
-        autoShapes.push({
-          orig: dest,
-          brush: 'invisible',
-          customSvg: { html: getInBoardBadge(move.classification) }
-        });
-      }
-    }
-
-    cgConfig = {
-      fen: $currentFen || 'start',
-      orientation: $isFlipped ? 'black' : 'white',
-      viewOnly: true,
-      lastMove,
-      drawable: {
-        brushes: {
-          invisible: {
-            key: 'i',
-            color: 'transparent',
-            opacity: 0,
-            lineWidth: 1
-          }
-        },
-        autoShapes,
-        visible: true
-      }
-    };
-  }
+  $: blackTitle =
+    $fetchedProfile &&
+    blackName.toLowerCase() === $fetchedProfile.username.toLowerCase()
+      ? $fetchedProfile.title
+      : opponentProfile?.title;
 
   async function runAnalysis(pgn: string) {
     try {
@@ -212,47 +111,22 @@
   }
 
   onMount(() => {
-    initTauriListeners().catch(console.error);
+    initAnalysisListeners().catch(console.error);
   });
 </script>
 
 <main class="layout">
   <section class="layout__board">
-    <div class="board-layout-grid">
-      <div class="grid-top-profile">
-        <PlayerProfile
-          name={topName}
-          title={topTitle}
-          rating={topRating}
-          avatarUrl={topAvatar}
-          capturedPieces={topCaptured}
-          advantage={topAdvantage}
-        />
-      </div>
-
-      <div class="grid-eval"><EvalBar /></div>
-
-      <div class="grid-board">
-        <div class="board-frame">
-          <div
-            class="board"
-            style="--move-highlight: {destHighlight};"
-            use:chessground={cgConfig}
-          ></div>
-        </div>
-      </div>
-
-      <div class="grid-bottom-profile">
-        <PlayerProfile
-          name={bottomName}
-          title={bottomTitle}
-          rating={bottomRating}
-          avatarUrl={bottomAvatar}
-          capturedPieces={bottomCaptured}
-          advantage={bottomAdvantage}
-        />
-      </div>
-    </div>
+    <ChessBoard
+      {whiteName}
+      {blackName}
+      whiteRating={$selectedGame?.white.rating ?? null}
+      blackRating={$selectedGame?.black.rating ?? null}
+      {whiteTitle}
+      {blackTitle}
+      {whiteAvatar}
+      {blackAvatar}
+    />
   </section>
 
   <aside class="sidebar">
@@ -264,22 +138,39 @@
       <button
         class="sidebar__nav-btn"
         class:sidebar__nav-btn--active={$sidebarView === 'import'}
-        on:click={() => ($sidebarView = 'import')}>Import</button
+        on:click={() => ($sidebarView = 'import')}
       >
+        Import
+      </button>
       <button
         class="sidebar__nav-btn"
         class:sidebar__nav-btn--active={$sidebarView === 'game'}
-        on:click={() => ($sidebarView = 'game')}>Game</button
+        on:click={() => ($sidebarView = 'game')}
       >
+        Game
+      </button>
       <button
         class="sidebar__nav-btn"
         class:sidebar__nav-btn--active={$sidebarView === 'summary'}
-        on:click={() => ($sidebarView = 'summary')}>Summary</button
+        on:click={() => ($sidebarView = 'summary')}
       >
+        Summary
+      </button>
     </div>
 
     {#if $sidebarView === 'import'}
       <FetchGames />
+      {#if !$analysisSummary && $selectedGame}
+        <div class="sidebar__controls">
+          <button
+            class="analyze-preview-btn"
+            on:click={() => runAnalysis($selectedGame!.pgn)}
+          >
+            <Cpu size={18} strokeWidth={3} />
+            Analyze Game
+          </button>
+        </div>
+      {/if}
     {:else if $sidebarView === 'game'}
       {#if $isAnalyzing}
         <AnalysisLoading progress={$loadingProgress} />
@@ -288,7 +179,6 @@
         <MoveList />
         <div class="sidebar__controls">
           <BoardControls />
-
           {#if !$analysisSummary && $selectedGame}
             <button
               class="analyze-preview-btn"
@@ -307,45 +197,6 @@
 </main>
 
 <style>
-  /* ── Global Styles ────────────────────────────────────────────────── */
-  :global(body) {
-    background-color: #0f0f11;
-    color: #ececec;
-    font-family: 'Outfit', system-ui, sans-serif;
-    margin: 0;
-  }
-
-  :global(.cg-wrap square.last-move) {
-    background-color: var(--move-highlight) !important;
-  }
-
-  :global(.badge-anim) {
-    animation: badge-pop-in 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.1s
-      both;
-  }
-
-  :global(.spin) {
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  @keyframes badge-pop-in {
-    0% {
-      opacity: 0;
-      transform: scale(0.5);
-    }
-    100% {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
-
-  /* ── Layout Framework ────────────────────────────────────────────── */
   .layout {
     display: flex;
     height: 100vh;
@@ -357,7 +208,6 @@
     box-sizing: border-box;
     overflow: hidden;
   }
-
   .layout__board {
     flex: 1;
     display: flex;
@@ -366,62 +216,6 @@
     height: 100%;
     min-height: 0;
   }
-
-  /* ── Board Layout Grid Structural Alignment ─────────────────────── */
-  .board-layout-grid {
-    display: grid;
-    grid-template-columns: max-content max-content;
-    grid-template-rows: max-content minmax(0, 1fr) max-content;
-    gap: 0 16px;
-    height: 100%;
-    max-height: 100%;
-  }
-
-  .grid-top-profile {
-    grid-column: 2;
-    grid-row: 1;
-    margin-bottom: 8px;
-    width: 100%;
-  }
-
-  .grid-eval {
-    grid-column: 1;
-    grid-row: 2;
-    height: 100%;
-  }
-
-  .grid-board {
-    grid-column: 2;
-    grid-row: 2;
-    height: 100%;
-    display: flex;
-  }
-
-  .board-frame {
-    height: 100%;
-    aspect-ratio: 1 / 1;
-    position: relative;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-    border-radius: 4px;
-    overflow: hidden;
-    flex-shrink: 0;
-  }
-
-  .board {
-    width: 100%;
-    height: 100%;
-    position: relative;
-    user-select: none;
-  }
-
-  .grid-bottom-profile {
-    grid-column: 2;
-    grid-row: 3;
-    margin-top: 8px;
-    width: 100%;
-  }
-
-  /* ── Sidebar Component Layout ────────────────────────────────────── */
   .sidebar {
     width: 360px;
     height: 100%;
@@ -435,7 +229,6 @@
     overflow: hidden;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
   }
-
   .sidebar__header {
     padding: 1.1rem 1.25rem 1rem;
     background: #1c1c1f;
@@ -445,7 +238,6 @@
     align-items: baseline;
     flex-shrink: 0;
   }
-
   .sidebar__title {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 1.8rem;
@@ -454,14 +246,12 @@
     letter-spacing: 1px;
     color: #fff;
   }
-
   .sidebar__nav {
     display: flex;
     flex-shrink: 0;
     border-bottom: 1px solid #2a2a2e;
     background: #1c1c1f;
   }
-
   .sidebar__nav-btn {
     flex: 1;
     background: transparent;
@@ -480,23 +270,19 @@
       border-color 0.15s ease;
     margin-bottom: -1px;
   }
-
   .sidebar__nav-btn:hover:not(.sidebar__nav-btn--active) {
     color: #888;
   }
-
   .sidebar__nav-btn--active {
     color: #ececec;
     border-bottom-color: #ececec;
   }
-
   .sidebar__controls {
-    padding: 0.2rem;
+    padding: 0.75rem 1rem;
     background: #1c1c1f;
     border-top: 1px solid #2a2a2e;
     flex-shrink: 0;
   }
-
   .analyze-preview-btn {
     background: #1b382b;
     border: 1px solid #2b5743;
@@ -515,7 +301,6 @@
     width: 100%;
     margin-top: 0.75rem;
   }
-
   .analyze-preview-btn:hover {
     background: #234737;
     border-color: #3b7359;

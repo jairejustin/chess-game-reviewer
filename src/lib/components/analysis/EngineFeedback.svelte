@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { moves, activePly } from '../store/gameStore';
-  import { tallyLabels, formatEval } from '../utils/ui';
-  import Figurine from './Figurine.svelte';
-  import Badge from './Badge.svelte';
+  import { moves, activePly } from '../../stores/boardStore';
+  import { tallyLabels, formatEval } from '../../utils/ui';
+  import Figurine from '../ui/Figurine.svelte';
+  import Badge from '../ui/Badge.svelte';
 
   $: currentMove = $moves[$activePly];
 </script>

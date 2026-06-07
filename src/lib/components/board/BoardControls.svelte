@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { moves, activePly, isFlipped } from '../store/gameStore';
+  import { moves, activePly, isFlipped } from '$lib/stores/boardStore';
   import ChevronLeft from 'lucide-svelte/icons/chevron-left';
   import ChevronRight from 'lucide-svelte/icons/chevron-right';
   import ArrowUpDown from 'lucide-svelte/icons/arrow-up-down';

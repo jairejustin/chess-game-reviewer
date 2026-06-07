@@ -18,9 +18,9 @@
   $: parsed = (() => {
     // Safety guard for undefined/empty strings
     if (!san) return { piece: null, text: '' };
-    
+
     if (san === 'O-O' || san === 'O-O-O') return { piece: null, text: san };
-    
+
     const match = san.match(/^([KQRBN])?(.*)$/);
     if (match && match[1]) {
       return { piece: match[1], text: match[2] };

@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { analysisSummary, activePly, sidebarView } from '../store/gameStore';
-  import { tallyLabels, formatAccuracy, activeTallyRows } from '../utils/ui';
-  import Badge from './Badge.svelte';
+  import { activePly } from '$lib/stores/boardStore';
+  import { analysisSummary, sidebarView } from '$lib/stores/reviewStore';
+  import { tallyLabels, formatAccuracy, activeTallyRows } from '$lib/utils/ui';
+  import Badge from '$lib/components/ui/Badge.svelte';
   import EvalGraph from './EvalGraph.svelte';
 
   function startReview() {
