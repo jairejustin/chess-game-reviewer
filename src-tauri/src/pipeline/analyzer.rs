@@ -21,12 +21,15 @@ use shakmaty::{
     fen::Fen, CastlingMode, Chess, Position,
 };
 use std::io::Cursor;
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 
 pub fn run_analysis_pipeline(
     app: AppHandle,
     pgn: String,
     time_ms: u32,
+    engine_path: String,
+    book: Arc<OpeningBook>,
 ) -> Result<(), String> {
     app.emit("analysis-started", ())
         .map_err(|e| e.to_string())?;
@@ -49,24 +52,7 @@ pub fn run_analysis_pipeline(
             }
         };
 
-    // temp fix
-    let engine_path = std::env::current_dir()
-        .unwrap()
-        .join("core/engine/stockfish-ubuntu-x86-64-bmi2");
-
-    let book_path = std::env::current_dir()
-        .unwrap()
-        .join("core/database/book.bin");
-
-    // Loads the opening database
-    let book = OpeningBook::new(
-        book_path.to_str().unwrap_or(""),
-    );
-
-    // Loads the engine
-    let mut engine = UciEngine::new(
-        engine_path.to_str().unwrap(),
-    );
+    let mut engine = UciEngine::new(&engine_path);
 
     // Starting position
     let initial_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";

@@ -15,23 +15,30 @@ use crate::models::game::{
 };
 use pgn_reader::Reader;
 use std::io::Cursor;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, State};
+use crate::AppState;
 
 #[tauri::command]
 pub fn analyze_game(
     app: AppHandle,
     pgn: String,
     target_time_ms: Option<u32>,
+    state: State<'_, AppState>,
 ) -> Result<(), String> {
     // The search time for the UCI chess engine
     let time_ms = target_time_ms.unwrap_or(1500);
 
-    // Spawn a dedicated background thread for the blocking UCI engine
+    // Clone the paths/arcs for the background thread
+    let engine_path = state.engine_path.clone();
+    let book = state.opening_book.clone();
+
     std::thread::spawn(move || {
         if let Err(e) = run_analysis_pipeline(
             app.clone(),
             pgn,
             time_ms,
+            engine_path,
+            book,
         ) {
             let _ =
                 app.emit("analysis-error", &e);
