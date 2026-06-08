@@ -51,6 +51,29 @@ pub fn extract_mate(
     }
 }
 
+/// Converts a backend `Evaluation` into a frontend display string.
+/// Negative mate scores are rendered as "-M3" so the UI can distinguish losing mates.
+pub fn format_eval(eval: Evaluation) -> String {
+    match eval {
+        Evaluation::Cp(cp) => {
+            let score = cp as f32 / 100.0;
+            if score >= 0.0 {
+                format!("+{:.2}", score)
+            } else {
+                format!("{:.2}", score)
+            }
+        }
+        // Positive mate = we are delivering mate; negative = opponent is.
+        Evaluation::Mate(m) => {
+            if m >= 0 {
+                format!("M{}", m)
+            } else {
+                format!("-M{}", m.abs())
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -189,6 +212,80 @@ mod tests {
         assert_eq!(
             extract_mate(&Evaluation::Cp(0)),
             None
+        );
+    }
+
+    #[test]
+    fn format_eval_positive_cp_has_plus_prefix() {
+        assert_eq!(
+            format_eval(Evaluation::Cp(145)),
+            "+1.45"
+        );
+    }
+
+    #[test]
+    fn format_eval_negative_cp_has_no_prefix() {
+        assert_eq!(
+            format_eval(Evaluation::Cp(-200)),
+            "-2.00"
+        );
+    }
+
+    #[test]
+    fn format_eval_zero_cp_has_plus_prefix() {
+        // Zero is non-negative, so it gets the + prefix
+        assert_eq!(
+            format_eval(Evaluation::Cp(0)),
+            "+0.00"
+        );
+    }
+
+    #[test]
+    fn format_eval_cp_rounds_to_two_decimal_places(
+    ) {
+        assert_eq!(
+            format_eval(Evaluation::Cp(133)),
+            "+1.33"
+        );
+        assert_eq!(
+            format_eval(Evaluation::Cp(-7)),
+            "-0.07"
+        );
+    }
+
+    #[test]
+    fn format_eval_positive_mate_renders_as_m_prefix(
+    ) {
+        assert_eq!(
+            format_eval(Evaluation::Mate(3)),
+            "M3"
+        );
+    }
+
+    #[test]
+    fn format_eval_mate_in_one_renders_correctly()
+    {
+        assert_eq!(
+            format_eval(Evaluation::Mate(1)),
+            "M1"
+        );
+    }
+
+    #[test]
+    fn format_eval_negative_mate_renders_with_dash_prefix(
+    ) {
+        assert_eq!(
+            format_eval(Evaluation::Mate(-2)),
+            "-M2"
+        );
+    }
+
+    #[test]
+    fn format_eval_negative_mate_in_one_renders_correctly(
+    ) {
+        assert_eq!(
+            format_eval(Evaluation::Mate(-1)),
+            "-M1"
         );
     }
 }

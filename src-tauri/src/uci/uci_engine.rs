@@ -82,6 +82,15 @@ impl UciEngine {
         }
     }
 
+    /// Destructures the initialized UciEngine, giving up ownership of the underlying
+    /// process and piped streams to be managed by asynchronous tokio tasks.
+    pub fn unpack(
+        self,
+    ) -> (Child, ChildStdin, BufReader<ChildStdout>)
+    {
+        (self.process, self.stdin, self.stdout)
+    }
+
     pub fn analyze_position(
         &mut self,
         position_cmd: &str,
@@ -152,7 +161,7 @@ impl UciEngine {
         self.process.wait().unwrap();
     }
 
-    fn parse_info_line(
+    pub fn parse_info_line(
         line: &str,
     ) -> Option<(usize, Evaluation, Vec<String>)>
     {
@@ -208,7 +217,7 @@ impl UciEngine {
         Some((multipv, eval, pv_moves))
     }
 
-    fn parse_bestmove(
+    pub fn parse_bestmove(
         line: &str,
     ) -> Option<String> {
         let words: Vec<&str> =

@@ -13,10 +13,14 @@ use crate::models::game::{
     AnalyzedMove, GameMetadata, MoveBadge,
     MoveCounts,
 };
+use crate::uci::live_manager::{
+    LiveCommand, LiveEngineManager,
+};
+
+use crate::AppState;
 use pgn_reader::Reader;
 use std::io::Cursor;
 use tauri::{AppHandle, Emitter, State};
-use crate::AppState;
 
 #[tauri::command]
 pub fn analyze_game(
@@ -115,4 +119,65 @@ pub fn parse_pgn(
         .collect();
 
     Ok(preview_moves)
+}
+
+/// Starts or fully terminates the live engine process.
+///
+/// `start = true`  -> spawns the engine binary and performs the UCI handshake.
+/// `start = false` -> sends "quit" to the engine and tears down all I/O threads.
+///
+/// Use `stop_live_analysis` to merely pause searching without killing the process.
+/// `binary_path` is ignored when `start = false`.
+#[tauri::command]
+pub async fn toggle_live_engine(
+    start: bool,
+    state: State<'_, LiveEngineManager>,
+    app_state: State<'_, AppState>,
+) -> Result<(), String> {
+    let cmd = if start {
+        LiveCommand::Start {
+            binary_path: app_state
+                .engine_path
+                .clone(),
+        }
+    } else {
+        LiveCommand::Terminate
+    };
+
+    state.tx.send(cmd).map_err(|e| e.to_string())
+}
+
+/// Starts an infinite analysis of the given position.
+///
+/// Automatically interrupts any search already in progress before
+/// loading the new FEN, so it is safe to call repeatedly as the
+/// user steps through moves.
+#[tauri::command]
+pub async fn analyze_live_position(
+    fen: String,
+    multipv: u8,
+    state: State<'_, LiveEngineManager>,
+) -> Result<(), String> {
+    state
+        .tx
+        .send(LiveCommand::Analyze {
+            fen,
+            multipv,
+        })
+        .map_err(|e| e.to_string())
+}
+
+/// Stops the current search without terminating the engine process.
+///
+/// Call this when the user navigates away from the board or closes
+/// the analysis panel. To fully shut down the engine, use
+/// `toggle_live_engine(false, ...)` instead.
+#[tauri::command]
+pub async fn stop_live_analysis(
+    state: State<'_, LiveEngineManager>,
+) -> Result<(), String> {
+    state
+        .tx
+        .send(LiveCommand::Stop)
+        .map_err(|e| e.to_string())
 }

@@ -6,8 +6,9 @@ mod pipeline;
 mod uci;
 
 use crate::commands::{
-    analyze_game, fetch_games,
-    get_player_profile, parse_pgn,
+    analyze_game, analyze_live_position,
+    fetch_games, get_player_profile, parse_pgn,
+    stop_live_analysis, toggle_live_engine,
 };
 use crate::data::book::OpeningBook;
 use crate::uci::live_manager::init_live_manager;
@@ -53,6 +54,9 @@ pub fn run() {
             fetch_games,
             parse_pgn,
             get_player_profile,
+            toggle_live_engine,
+            stop_live_analysis,
+            analyze_live_position,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
