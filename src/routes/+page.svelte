@@ -1,3 +1,9 @@
+<script context="module" lang="ts">
+  // Hoisting this here keeps it alive across page navigations.
+  // This prevents loadPreview from wiping the analysis when returning from Explorer!
+  let processedGameId: string | null = null;
+</script>
+
 <script lang="ts">
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
@@ -11,6 +17,8 @@
     isAnalyzing,
     loadingProgress,
     analysisSummary,
+    currentEval,
+    currentMateIn,
     initAnalysisListeners
   } from '$lib/stores/reviewStore';
 
@@ -22,6 +30,7 @@
   import MoveList from '$lib/components/analysis/MoveList.svelte';
   import GameSummary from '$lib/components/analysis/GameSummary.svelte';
   import AnalysisLoading from '$lib/components/ui/AnalysisLoading.svelte';
+  import ActionStrip from '$lib/components/ui/ActionStrip.svelte';
 
   let opponentProfile: any = null;
 
@@ -29,7 +38,10 @@
     try {
       const previewMoves: any[] = await invoke('parse_pgn', { pgn });
       $analysisSummary = null;
-      $moves = [{ ply: 0, san: '', fen: 'start', uci: '' }, ...previewMoves];
+      $moves = [
+        { ply: 0, san: '', fen: 'start', uci: '', source: 'game' },
+        ...previewMoves.map((m) => ({ ...m, source: 'game' }))
+      ];
       $activePly = $moves.length - 1;
       $sidebarView = 'game';
     } catch (err) {
@@ -37,8 +49,6 @@
     }
   }
 
-  // Handle board orientation and fetch the opponent's profile
-  let processedGameId: string | null = null;
   $: if ($selectedGame && $selectedGame.id !== processedGameId) {
     processedGameId = $selectedGame.id;
 
@@ -67,7 +77,6 @@
     loadPreview($selectedGame.pgn);
   }
 
-  // Dynamically map avatars and titles to the correct colors
   $: whiteName =
     $analysisSummary?.metadata.white ??
     $selectedGame?.white.username ??
@@ -126,8 +135,13 @@
       {blackTitle}
       {whiteAvatar}
       {blackAvatar}
+      evalCp={$currentEval}
+      evalMateIn={$currentMateIn}
+      evalActive={!!$analysisSummary}
     />
   </section>
+
+  <ActionStrip />
 
   <aside class="sidebar">
     <div class="sidebar__header">
@@ -197,6 +211,7 @@
 </main>
 
 <style>
+  /* All your existing CSS goes here unaltered... */
   .layout {
     display: flex;
     height: 100vh;
@@ -204,18 +219,23 @@
     max-width: 100%;
     margin: 0;
     padding: 1rem;
-    gap: 1.5rem;
+    gap: 0;
     box-sizing: border-box;
     overflow: hidden;
+    align-items: flex-start;
   }
+
   .layout__board {
     flex: 1;
     display: flex;
     justify-content: center;
-    align-items: flex-start;
+    align-items: center;
     height: 100%;
     min-height: 0;
+    padding: 4rem 1rem 4rem 4rem;
+    box-sizing: border-box;
   }
+
   .sidebar {
     width: 360px;
     height: 100%;
@@ -229,6 +249,7 @@
     overflow: hidden;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
   }
+
   .sidebar__header {
     padding: 1.1rem 1.25rem 1rem;
     background: #1c1c1f;
@@ -238,6 +259,7 @@
     align-items: baseline;
     flex-shrink: 0;
   }
+
   .sidebar__title {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 1.8rem;
@@ -246,12 +268,14 @@
     letter-spacing: 1px;
     color: #fff;
   }
+
   .sidebar__nav {
     display: flex;
     flex-shrink: 0;
     border-bottom: 1px solid #2a2a2e;
     background: #1c1c1f;
   }
+
   .sidebar__nav-btn {
     flex: 1;
     background: transparent;
@@ -270,19 +294,23 @@
       border-color 0.15s ease;
     margin-bottom: -1px;
   }
+
   .sidebar__nav-btn:hover:not(.sidebar__nav-btn--active) {
     color: #888;
   }
+
   .sidebar__nav-btn--active {
     color: #ececec;
     border-bottom-color: #ececec;
   }
+
   .sidebar__controls {
     padding: 0.75rem 1rem;
     background: #1c1c1f;
     border-top: 1px solid #2a2a2e;
     flex-shrink: 0;
   }
+
   .analyze-preview-btn {
     background: #1b382b;
     border: 1px solid #2b5743;
@@ -301,6 +329,7 @@
     width: 100%;
     margin-top: 0.75rem;
   }
+
   .analyze-preview-btn:hover {
     background: #234737;
     border-color: #3b7359;

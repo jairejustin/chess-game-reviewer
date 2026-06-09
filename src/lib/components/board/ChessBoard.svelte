@@ -11,7 +11,6 @@
   import EvalBar from '../analysis/EvalBar.svelte';
   import { calculateMaterial } from '../../utils/material';
 
-  // Player Data Props
   export let whiteName: string = 'White';
   export let blackName: string = 'Black';
   export let whiteTitle: string | null = null;
@@ -21,11 +20,15 @@
   export let whiteAvatar: string | null = null;
   export let blackAvatar: string | null = null;
 
+  export let evalCp: number = 0;
+  export let evalMateIn: number | null = null;
+  export let evalActive: boolean = false;
+
   $: material = calculateMaterial($currentFen || 'start');
+
   let destHighlight = 'rgba(155, 199, 0, 0.41)';
   let cgConfig: any = { fen: 'start', viewOnly: true };
 
-  // Flipped Board Logic Mapping
   $: topName = $isFlipped ? whiteName : blackName;
   $: bottomName = $isFlipped ? blackName : whiteName;
   $: topRating = $isFlipped ? whiteRating : blackRating;
@@ -45,7 +48,6 @@
   $: topTitle = $isFlipped ? whiteTitle : blackTitle;
   $: bottomTitle = $isFlipped ? blackTitle : whiteTitle;
 
-  // Chessground configuration
   $: {
     const move = $moves[$activePly];
     let autoShapes: any[] = [];
@@ -93,8 +95,8 @@
   }
 </script>
 
-<div class="board-layout-grid">
-  <div class="grid-top-profile">
+<div class="board-anchor">
+  <div class="anchor-top">
     <PlayerProfile
       name={topName}
       title={topTitle}
@@ -104,19 +106,20 @@
       advantage={topAdvantage}
     />
   </div>
-  <div class="grid-eval">
-    <EvalBar />
+
+  <div class="anchor-left">
+    <EvalBar eval_cp={evalCp} mateIn={evalMateIn} active={evalActive} />
   </div>
-  <div class="grid-board">
-    <div class="board-frame">
-      <div
-        class="board"
-        style="--move-highlight: {destHighlight};"
-        use:chessground={cgConfig}
-      ></div>
-    </div>
+
+  <div class="board-frame">
+    <div
+      class="board"
+      style="--move-highlight: {destHighlight};"
+      use:chessground={cgConfig}
+    ></div>
   </div>
-  <div class="grid-bottom-profile">
+
+  <div class="anchor-bottom">
     <PlayerProfile
       name={bottomName}
       title={bottomTitle}
@@ -129,51 +132,50 @@
 </div>
 
 <style>
-  /* Base Board Layout CSS from +page.svelte goes here */
-  .board-layout-grid {
-    display: grid;
-    grid-template-columns: max-content max-content;
-    grid-template-rows: max-content minmax(0, 1fr) max-content;
-    gap: 0 16px;
-    height: 100%;
-    max-height: 100%;
-  }
-  .grid-top-profile {
-    grid-column: 2;
-    grid-row: 1;
-    margin-bottom: 8px;
-    width: 100%;
-  }
-  .grid-eval {
-    grid-column: 1;
-    grid-row: 2;
-    height: 100%;
-  }
-  .grid-board {
-    grid-column: 2;
-    grid-row: 2;
-    height: 100%;
-    display: flex;
-  }
-  .board-frame {
+  .board-anchor {
+    position: relative;
     height: 100%;
     aspect-ratio: 1 / 1;
+    flex-shrink: 1;
+  }
+
+  .board-frame {
+    width: 100%;
+    height: 100%;
     position: relative;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
     border-radius: 4px;
     overflow: hidden;
-    flex-shrink: 0;
   }
+
   .board {
     width: 100%;
     height: 100%;
     position: relative;
     user-select: none;
   }
-  .grid-bottom-profile {
-    grid-column: 2;
-    grid-row: 3;
-    margin-top: 8px;
+
+  .anchor-top {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
     width: 100%;
+    margin-bottom: 8px;
+  }
+
+  .anchor-bottom {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  .anchor-left {
+    position: absolute;
+    right: 100%;
+    top: 0;
+    height: 100%;
+    margin-right: 16px;
   }
 </style>
