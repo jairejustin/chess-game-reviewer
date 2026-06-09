@@ -31,7 +31,7 @@ export const tallyLabels: Record<MoveBadge, string> = {
 export function formatEval(cp: number, mateIn?: number | null): string {
   if (mateIn != null) {
     if (mateIn === 0 && cp >= 10000) return '+M';
-    if (mateIn === 0 && cp <= -10000) return '+M';
+    if (mateIn === 0 && cp <= -10000) return '-M';
     return mateIn > 0 ? `+M${mateIn}` : `-M${Math.abs(mateIn)}`;
   }
   if (cp >= 10000) return '+M';
