@@ -21,6 +21,7 @@ use shakmaty::{
     fen::Fen, CastlingMode, Chess, Position,
 };
 use std::io::Cursor;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 
@@ -30,6 +31,7 @@ pub fn run_analysis_pipeline(
     time_ms: u32,
     engine_path: String,
     book: Arc<OpeningBook>,
+    cancel_flag: Arc<AtomicBool>,
 ) -> Result<(), String> {
     app.emit("analysis-started", ())
         .map_err(|e| e.to_string())?;
@@ -154,6 +156,11 @@ pub fn run_analysis_pipeline(
     };
 
     for (san, fen, _uci) in positions {
+        if cancel_flag.load(Ordering::Relaxed) {
+            engine.quit();
+            return Ok(());
+        }
+
         // Perspective flags for normalization
         let is_white_moving = ply_count % 2 != 0;
         let is_white_to_move_after_play =

@@ -20,6 +20,7 @@ use crate::uci::live_manager::{
 use crate::AppState;
 use pgn_reader::Reader;
 use std::io::Cursor;
+use std::sync::atomic::Ordering;
 use tauri::{AppHandle, Emitter, State};
 
 #[tauri::command]
@@ -36,6 +37,15 @@ pub fn analyze_game(
     let engine_path = state.engine_path.clone();
     let book = state.opening_book.clone();
 
+    // Reset the flag to false before starting a new analysis
+    state
+        .cancel_analysis_flag
+        .store(false, Ordering::Relaxed);
+
+    // Clone the flag to pass to the detached thread
+    let cancel_flag =
+        state.cancel_analysis_flag.clone();
+
     std::thread::spawn(move || {
         if let Err(e) = run_analysis_pipeline(
             app.clone(),
@@ -43,6 +53,7 @@ pub fn analyze_game(
             time_ms,
             engine_path,
             book,
+            cancel_flag,
         ) {
             let _ =
                 app.emit("analysis-error", &e);
@@ -180,4 +191,15 @@ pub async fn stop_live_analysis(
         .tx
         .send(LiveCommand::Stop)
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn cancel_analysis(
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    // Flip the flag to true. The analysis pipeline will check this flag.
+    state
+        .cancel_analysis_flag
+        .store(true, Ordering::Relaxed);
+    Ok(())
 }

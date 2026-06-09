@@ -7,17 +7,20 @@ mod uci;
 
 use crate::commands::{
     analyze_game, analyze_live_position,
-    fetch_games, get_player_profile, parse_pgn,
+    cancel_analysis, fetch_games,
+    get_player_profile, parse_pgn,
     stop_live_analysis, toggle_live_engine,
 };
 use crate::data::book::OpeningBook;
 use crate::uci::live_manager::init_live_manager;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tauri::Manager;
 
 pub struct AppState {
     pub engine_path: String,
     pub opening_book: Arc<OpeningBook>,
+    pub cancel_analysis_flag: Arc<AtomicBool>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -42,6 +45,7 @@ pub fn run() {
             app.manage(AppState {
                 engine_path,
                 opening_book,
+                cancel_analysis_flag: Arc::new(AtomicBool::new(false)),
             });
 
             let manager = init_live_manager(app.handle().clone());
@@ -57,6 +61,7 @@ pub fn run() {
             toggle_live_engine,
             stop_live_analysis,
             analyze_live_position,
+            cancel_analysis,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
