@@ -1,10 +1,11 @@
-export interface AnalyzedMove {
+export interface MoveNode {
   ply: number;
   san: string;
   fen: string;
-  uci: String;
+  uci: string;
 
-  // data from analysis
+  source: 'game' | 'variation';
+
   prevBestEval?: number;
   playedEval?: number;
   bestMoveSan?: string;
@@ -60,5 +61,14 @@ export interface AnalysisSummary {
   moveCountsWhite: MoveCounts;
   moveCountsBlack: MoveCounts;
   metadata: GameMetadata;
-  moves: AnalyzedMove[];
+  moves: MoveNode[];
+}
+
+export interface PVLine {
+  index: number;
+  evaluation: string;
+  evalCp: number;
+  mateIn: number | null;
+  sanMoves: string[];
+  uciMoves: string[];
 }
