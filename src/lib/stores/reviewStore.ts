@@ -43,7 +43,9 @@ export async function initAnalysisListeners() {
   await listen<AnalysisSummary>('analysis-complete', (event) => {
     isAnalyzing.set(false);
     analysisSummary.set(event.payload);
-    moves.set(event.payload.moves);
+    moves.set(
+      event.payload.moves.map((m) => ({ ...m, source: 'game' as const }))
+    );
     if (event.payload.moves.length > 0) {
       activePly.set(event.payload.moves.length - 1);
     }
