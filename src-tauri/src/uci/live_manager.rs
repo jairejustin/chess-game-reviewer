@@ -259,13 +259,19 @@ fn spawn_stdout_loop(
             )) = UciEngine::parse_info_line(
                 trimmed,
             ) {
-                // Ignore engine bounds updates that contain no PV moves.
-                if pv_moves.is_empty() {
+                let is_mate = matches!(
+                    eval,
+                    Evaluation::Mate(_)
+                );
+
+                // Ignores bound updates with no PVs, unless its a mate.
+                // When Stockfish finds the same pos on transposition table,
+                // its known to just omit the PV and answer instantly from cache.
+                if pv_moves.is_empty() && !is_mate
+                {
                     continue;
                 }
 
-                // Read the turn flag with SeqCst so we see the write from the stdin
-                // loop even if it happened concurrently.
                 let is_white = is_white_turn
                     .load(Ordering::SeqCst);
 
@@ -296,8 +302,14 @@ fn spawn_stdout_loop(
                         )
                     });
 
-                if now.duration_since(last_emit)
-                    >= Duration::from_millis(50)
+                // Bypasses throttle for mates. Forced mates cause Stockfish
+                // to stop searching, so we cannot risk dropping its final output.
+                if is_mate
+                    || now
+                        .duration_since(last_emit)
+                        >= Duration::from_millis(
+                            50,
+                        )
                 {
                     let payload = LivePayload {
                         multipv,
