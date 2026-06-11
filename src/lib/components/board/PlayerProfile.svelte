@@ -31,7 +31,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    height: 40px;
+    height: 50px;
     padding: 0 2px;
     width: 100%;
     box-sizing: border-box;
