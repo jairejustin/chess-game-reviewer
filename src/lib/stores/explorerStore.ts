@@ -4,6 +4,8 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { Chess } from 'chess.js';
 import type { MoveNode, PVLine } from '../types/game';
 
+const STABLE_DEPTH = 8;
+
 /** The immutable copy of the main game */
 export const snapshotMoves = writable<MoveNode[]>([]);
 
@@ -26,6 +28,7 @@ export const engineStatus = writable<'thinking' | 'paused' | 'starting'>(
 export const liveEval = writable<number>(0);
 export const liveMateIn = writable<number | null>(null);
 export const livePVLines = writable<PVLine[]>([]);
+export const currentDepth = writable<number>(0);
 
 let analyzeTimeout: ReturnType<typeof setTimeout>;
 let engineHeartbeat: ReturnType<typeof setTimeout>;
@@ -67,8 +70,6 @@ engineWatcher.subscribe(({ fen, on }) => {
   }
 
   livePVLines.set([]);
-  liveEval.set(0);
-  liveMateIn.set(null);
 
   try {
     const chess = new Chess(fen === 'start' ? undefined : fen);
@@ -213,36 +214,42 @@ export async function mountExplorer(gameMoves: MoveNode[], startIndex: number) {
 
     clearTimeout(engineHeartbeat);
 
-    const { multipv, evaluation, pv } = event.payload;
+    const { depth, multipv, evaluation, pv } = event.payload;
+
+    currentDepth.set(depth);
 
     const { cp, mateIn, formatted } = parseRawEngineEval(evaluation);
+    const isMate = mateIn !== null;
+    const isStable = depth >= STABLE_DEPTH || isMate;
 
-    const line = uciLineToPVLine(
-      currentFenValue,
-      pv,
-      formatted,
-      cp,
-      mateIn,
-      multipv
-    );
-    if(!line) return;
-    pendingLines.set(multipv, line);
-
-    if (flushTimer) clearTimeout(flushTimer);
-    flushTimer = setTimeout(() => {
-      const sorted = Array.from(pendingLines.values()).sort(
-        (a, b) => a.index - b.index
+    if (isStable) {
+      const line = uciLineToPVLine(
+        currentFenValue,
+        pv,
+        formatted,
+        cp,
+        mateIn,
+        multipv
       );
-      livePVLines.set(sorted);
+      if(!line) return;
+      pendingLines.set(multipv, line);
 
-      const best = pendingLines.get(1);
-      if (best) {
-        liveEval.set(best.evalCp);
-        liveMateIn.set(best.mateIn);
-      }
+      if (flushTimer) clearTimeout(flushTimer);
+      flushTimer = setTimeout(() => {
+        const sorted = Array.from(pendingLines.values()).sort(
+          (a, b) => a.index - b.index
+        );
+        livePVLines.set(sorted);
 
-      engineStatus.set('thinking');
-    }, 60);
+        const best = pendingLines.get(1);
+        if (best) {
+          liveEval.set(best.evalCp);
+          liveMateIn.set(best.mateIn);
+        }
+
+        engineStatus.set('thinking');
+      }, 60);
+    }
   });
 
   engineOn.set(true);
@@ -272,7 +279,7 @@ function uciLineToPVLine(
   evalCp: number,
   mateIn: number | null,
   index: number
-): PVLine | null { // <-- Allow null return
+): PVLine | null {
   const chess = new Chess(startFen === 'start' ? undefined : startFen);
   const sanMoves: string[] = [];
 
