@@ -114,7 +114,7 @@ impl UciEngine {
         {
             let trimmed = line.trim();
 
-            if let Some((multipv, eval, pv)) =
+            if let Some((_depth, multipv, eval, pv)) =
                 Self::parse_info_line(trimmed)
             {
                 let cp = match eval {
@@ -163,7 +163,7 @@ impl UciEngine {
 
     pub fn parse_info_line(
         line: &str,
-    ) -> Option<(usize, Evaluation, Vec<String>)>
+    ) -> Option<(usize, usize, Evaluation, Vec<String>)>
     {
         let words: Vec<&str> =
             line.split_whitespace().collect();
@@ -171,6 +171,12 @@ impl UciEngine {
             return None;
         }
 
+        // Extract Depth
+        let depth = if let Some(idx) = words.iter().position(|&w| w == "depth") {
+            words.get(idx + 1)?.parse().ok()?
+        } else {
+            0 // Default to 0 since transposition table might also omit this
+        };
         let multipv = if let Some(idx) = words
             .iter()
             .position(|&w| w == "multipv")
@@ -214,7 +220,7 @@ impl UciEngine {
             Vec::new()
         };
 
-        Some((multipv, eval, pv_moves))
+        Some((depth, multipv, eval, pv_moves))
     }
 
     pub fn parse_bestmove(
@@ -239,7 +245,7 @@ mod tests {
         let result =
             UciEngine::parse_info_line(line);
         assert!(result.is_some());
-        let (multipv, eval, pv) = result.unwrap();
+        let (_, multipv, eval, pv) = result.unwrap();
         assert_eq!(multipv, 1);
         assert_eq!(eval, Evaluation::Cp(30));
         assert_eq!(pv, vec!["d2d4", "e7e6"]);
@@ -251,7 +257,7 @@ mod tests {
         let result =
             UciEngine::parse_info_line(line);
         assert!(result.is_some());
-        let (_, eval, _) = result.unwrap();
+        let (_, _, eval, _) = result.unwrap();
         assert_eq!(eval, Evaluation::Mate(3));
     }
 

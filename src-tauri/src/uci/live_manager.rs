@@ -30,6 +30,7 @@ pub struct LiveEngineManager {
 
 #[derive(Clone, Serialize)]
 pub struct LivePayload {
+    pub depth: usize,
     pub multipv: usize,
     pub evaluation: String,
     pub pv: Vec<String>,
@@ -253,6 +254,7 @@ fn spawn_stdout_loop(
             }
 
             if let Some((
+                depth,
                 multipv,
                 eval,
                 pv_moves,
@@ -312,6 +314,7 @@ fn spawn_stdout_loop(
                         )
                 {
                     let payload = LivePayload {
+                        depth,
                         multipv,
                         evaluation: format_eval(
                             normalized_eval,
