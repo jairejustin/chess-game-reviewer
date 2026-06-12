@@ -67,14 +67,22 @@
           <span class="multipv__eval {evalClass(line.evaluation)}">
             {line.evaluation}
           </span>
+
+          {#if line.sanMoves.length > 0}
+            <span class="multipv__first-move">
+              <Figurine san={line.sanMoves[0]} />
+            </span>
+          {/if}
+
           <span class="multipv__moves">
-            {#each line.sanMoves.slice(0, 6) as san}
+            {#each line.sanMoves.slice(1, 5) as san}
               <span class="multipv__move">
                 <Figurine {san} />
               </span>
             {/each}
-            {#if line.sanMoves.length > 6}
-              <span class="multipv__overflow">+{line.sanMoves.length - 6}</span>
+            
+            {#if line.sanMoves.length > 5}
+              <span class="multipv__overflow">+{line.sanMoves.length - 5}</span>
             {/if}
           </span>
         </button>
@@ -140,7 +148,7 @@
     padding: 0.55rem 1rem;
     background: transparent;
     border: none;
-    border-bottom: 1px solid #1e1e22;
+    border-bottom: 2px solid #1e1e22;
     color: inherit;
     font-family: inherit;
     text-align: left;
@@ -174,6 +182,30 @@
     flex-shrink: 0;
   }
 
+  .multipv__first-move {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.08);
+    padding: 0.5rem;
+    border-radius: 4px;
+    margin-right: 0.25rem;
+    display: inline-flex;
+    flex-shrink: 0;
+  }
+
+  .multipv__moves {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 6px;
+    font-size: 0.9rem;
+    color: #888888; 
+    font-family: 'Outfit', sans-serif;
+    min-width: 0;
+    overflow: hidden;
+  }
+
   .eval--winning {
     color: #95bb4a;
   }
@@ -190,16 +222,6 @@
     color: #e06060;
   }
 
-  .multipv__moves {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 2px 6px;
-    font-size: 0.9rem;
-    color: #bbb;
-    font-family: 'Outfit', sans-serif;
-    min-width: 0;
-    overflow: hidden;
-  }
 
   .multipv__move {
     white-space: nowrap;
