@@ -159,6 +159,22 @@ export function enterVariationFromPV(line: PVLine) {
 export function enterVariationFromMove(san: string, fen: string, uci: string) {
   const cursor = get(explorerIndex);
   const cl = get(currentLine);
+  const snapshot = get(snapshotMoves);
+
+  const isOnMainLine = cl[cursor]?.fen === snapshot[cursor]?.fen;
+  const nextSnapshotMove = snapshot[cursor + 1];
+
+  if (isOnMainLine && nextSnapshotMove && nextSnapshotMove.uci === uci) {
+    currentLine.set([...snapshot]);
+    explorerIndex.set(cursor + 1);
+    return;
+  }
+
+  const nextCurrentMove = cl[cursor + 1];
+  if (nextCurrentMove && nextCurrentMove.uci === uci) {
+    explorerIndex.set(cursor + 1);
+    return;
+  }
 
   const base = cl.slice(0, cursor + 1);
   const lastPly = base.length > 0 ? base[base.length - 1].ply : 0;
@@ -231,7 +247,7 @@ export async function mountExplorer(gameMoves: MoveNode[], startIndex: number) {
         mateIn,
         multipv
       );
-      if(!line) return;
+      if (!line) return;
       pendingLines.set(multipv, line);
 
       if (flushTimer) clearTimeout(flushTimer);
@@ -292,12 +308,12 @@ function uciLineToPVLine(
     try {
       const result = chess.move({ from, to, promotion });
       if (!result) {
-        if (i === 0) return null; // Reject the payload entirely if the first move is invalid
+        if (i === 0) return null;
         break;
       }
       sanMoves.push(result.san);
     } catch {
-      if (i === 0) return null; // Reject on catch as well
+      if (i === 0) return null;
       break;
     }
   }
