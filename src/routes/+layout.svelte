@@ -1,7 +1,6 @@
 <script>
   import '@lichess-org/chessground/assets/chessground.base.css';
   import '@lichess-org/chessground/assets/chessground.brown.css';
-  import '@lichess-org/chessground/assets/chessground.cburnett.css';
   // @ts-ignore
   import '@fontsource/bebas-neue';
   // @ts-ignore
@@ -16,6 +15,45 @@
     color: #ececec;
     font-family: 'Outfit', system-ui, sans-serif;
     margin: 0;
+  }
+
+  /* --- MAESTRO PIECE SET --- */
+  :global(.cg-wrap piece.pawn.white) {
+    background-image: url('/assets/pieces/maestro/wP.svg');
+  }
+  :global(.cg-wrap piece.knight.white) {
+    background-image: url('/assets/pieces/maestro/wN.svg');
+  }
+  :global(.cg-wrap piece.bishop.white) {
+    background-image: url('/assets/pieces/maestro/wB.svg');
+  }
+  :global(.cg-wrap piece.rook.white) {
+    background-image: url('/assets/pieces/maestro/wR.svg');
+  }
+  :global(.cg-wrap piece.queen.white) {
+    background-image: url('/assets/pieces/maestro/wQ.svg');
+  }
+  :global(.cg-wrap piece.king.white) {
+    background-image: url('/assets/pieces/maestro/wK.svg');
+  }
+
+  :global(.cg-wrap piece.pawn.black) {
+    background-image: url('/assets/pieces/maestro/bP.svg');
+  }
+  :global(.cg-wrap piece.knight.black) {
+    background-image: url('/assets/pieces/maestro/bN.svg');
+  }
+  :global(.cg-wrap piece.bishop.black) {
+    background-image: url('/assets/pieces/maestro/bB.svg');
+  }
+  :global(.cg-wrap piece.rook.black) {
+    background-image: url('/assets/pieces/maestro/bR.svg');
+  }
+  :global(.cg-wrap piece.queen.black) {
+    background-image: url('/assets/pieces/maestro/bQ.svg');
+  }
+  :global(.cg-wrap piece.king.black) {
+    background-image: url('/assets/pieces/maestro/bK.svg');
   }
 
   :global(.cg-wrap square.last-move) {
