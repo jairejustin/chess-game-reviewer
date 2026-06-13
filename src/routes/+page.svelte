@@ -1,16 +1,14 @@
-<script context="module" lang="ts">
-  // Hoisting this here keeps it alive across page navigations.
-  // This prevents loadPreview from wiping the analysis when returning from Explorer!
-  let processedGameId: string | null = null;
-</script>
-
 <script lang="ts">
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
   import Cpu from 'lucide-svelte/icons/cpu';
 
   // Stores
-  import { selectedGame, fetchedProfile } from '$lib/stores/fetchStore';
+  import {
+    selectedGame,
+    fetchedProfile,
+    processedGameId
+  } from '$lib/stores/fetchStore';
   import { moves, activePly, isFlipped } from '$lib/stores/boardStore';
   import {
     sidebarView,
@@ -49,8 +47,8 @@
     }
   }
 
-  $: if ($selectedGame && $selectedGame.id !== processedGameId) {
-    processedGameId = $selectedGame.id;
+  $: if ($selectedGame && $selectedGame.id !== $processedGameId) {
+    $processedGameId = $selectedGame.id;
 
     if ($fetchedProfile) {
       const userLower = $fetchedProfile.username.toLowerCase();
@@ -213,7 +211,6 @@
 </main>
 
 <style>
-  /* All your existing CSS goes here unaltered... */
   .layout {
     display: flex;
     height: 100vh;

@@ -17,6 +17,7 @@ export const isFetching = writable<boolean>(false);
 export const fetchError = writable<string | null>(null);
 export const fetchCursor = writable<ChessComCursor | null>(null);
 export const hasMore = writable<boolean>(false);
+export const processedGameId = writable<string | null>(null);
 
 export async function fetchGames(
   username: string,
