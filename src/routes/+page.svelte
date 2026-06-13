@@ -138,6 +138,8 @@
       evalCp={$currentEval}
       evalMateIn={$currentMateIn}
       evalActive={!!$analysisSummary}
+      fen={$moves[$activePly]?.fen ?? 'start'}
+      currentMove={$moves[$activePly]}
     />
   </section>
 

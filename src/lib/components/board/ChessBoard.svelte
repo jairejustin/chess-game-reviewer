@@ -1,15 +1,11 @@
 <script lang="ts">
   import { chessground } from '../../actions/chessground';
-  import {
-    moves,
-    activePly,
-    currentFen,
-    isFlipped
-  } from '../../stores/boardStore';
+  import { isFlipped } from '../../stores/boardStore';
   import { getInBoardBadge, badgeColors } from '../../utils/boardBadges';
   import PlayerProfile from './PlayerProfile.svelte';
   import EvalBar from '../analysis/EvalBar.svelte';
   import { calculateMaterial } from '../../utils/material';
+  import type { MoveNode } from '../../types/game';
 
   export let whiteName: string = 'White';
   export let blackName: string = 'Black';
@@ -24,7 +20,14 @@
   export let evalMateIn: number | null = null;
   export let evalActive: boolean = false;
 
-  $: material = calculateMaterial($currentFen || 'start');
+  export let fen: string = 'start';
+  export let currentMove: MoveNode | null | undefined = null;
+  export let viewOnly: boolean = true;
+  export let legalDests: Map<string, string[]> | undefined = undefined;
+  export let onMove: ((orig: string, dest: string) => void) | undefined =
+    undefined;
+
+  $: material = calculateMaterial(fen || 'start');
 
   let destHighlight = 'rgba(155, 199, 0, 0.41)';
   let cgConfig: any = { fen: 'start', viewOnly: true };
@@ -35,6 +38,7 @@
   $: bottomRating = $isFlipped ? blackRating : whiteRating;
   $: topAvatar = $isFlipped ? whiteAvatar : blackAvatar;
   $: bottomAvatar = $isFlipped ? blackAvatar : whiteAvatar;
+
   $: topCaptured = $isFlipped ? material.whiteCaptured : material.blackCaptured;
   $: bottomCaptured = $isFlipped
     ? material.blackCaptured
@@ -45,39 +49,39 @@
   $: bottomAdvantage = $isFlipped
     ? material.blackAdvantage
     : material.whiteAdvantage;
+
   $: topTitle = $isFlipped ? whiteTitle : blackTitle;
   $: bottomTitle = $isFlipped ? blackTitle : whiteTitle;
 
   $: {
-    const move = $moves[$activePly];
     let autoShapes: any[] = [];
     let lastMove: string[] = [];
     destHighlight = 'rgba(155, 199, 0, 0.41)';
 
     if (
-      move &&
-      move.ply > 0 &&
-      typeof move.uci === 'string' &&
-      move.uci.length >= 4
+      currentMove &&
+      currentMove.ply > 0 &&
+      typeof currentMove.uci === 'string' &&
+      currentMove.uci.length >= 4
     ) {
-      const orig = move.uci.substring(0, 2);
-      const dest = move.uci.substring(2, 4);
+      const orig = currentMove.uci.substring(0, 2);
+      const dest = currentMove.uci.substring(2, 4);
       lastMove = [orig, dest];
 
-      if (move.classification) {
-        destHighlight = badgeColors[move.classification] + '66';
+      if (currentMove.classification) {
+        destHighlight = badgeColors[currentMove.classification] + '66';
         autoShapes.push({
           orig: dest,
           brush: 'invisible',
-          customSvg: { html: getInBoardBadge(move.classification) }
+          customSvg: { html: getInBoardBadge(currentMove.classification) }
         });
       }
     }
 
-    cgConfig = {
-      fen: $currentFen || 'start',
+    const config: any = {
+      fen: fen || 'start',
       orientation: $isFlipped ? 'black' : 'white',
-      viewOnly: true,
+      viewOnly,
       lastMove,
       drawable: {
         brushes: {
@@ -92,6 +96,20 @@
         visible: true
       }
     };
+
+    if (!viewOnly) {
+      config.movable = {
+        free: false,
+        color: 'both',
+        dests: legalDests,
+        showDests: false,
+        events: {
+          after: onMove
+        }
+      };
+    }
+
+    cgConfig = config;
   }
 </script>
 
@@ -138,7 +156,6 @@
     aspect-ratio: 1 / 1;
     flex-shrink: 1;
   }
-
   .board-frame {
     width: 100%;
     height: 100%;
@@ -147,14 +164,12 @@
     border-radius: 4px;
     overflow: hidden;
   }
-
   .board {
     width: 100%;
     height: 100%;
     position: relative;
     user-select: none;
   }
-
   .anchor-top {
     position: absolute;
     bottom: 100%;
@@ -162,7 +177,6 @@
     width: 100%;
     margin-bottom: 8px;
   }
-
   .anchor-bottom {
     position: absolute;
     top: 100%;
@@ -170,7 +184,6 @@
     width: 100%;
     margin-top: 8px;
   }
-
   .anchor-left {
     position: absolute;
     right: 100%;
