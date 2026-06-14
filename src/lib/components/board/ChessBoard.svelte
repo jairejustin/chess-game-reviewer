@@ -6,6 +6,7 @@
   import EvalBar from '../analysis/EvalBar.svelte';
   import { calculateMaterial } from '../../utils/material';
   import type { MoveNode } from '../../types/game';
+  import { playBoardSound } from '$lib/utils/audio';
 
   export let whiteName: string = 'White';
   export let blackName: string = 'Black';
