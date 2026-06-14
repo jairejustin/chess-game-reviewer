@@ -6,6 +6,7 @@
   import EvalBar from '../analysis/EvalBar.svelte';
   import { calculateMaterial } from '../../utils/material';
   import type { MoveNode } from '../../types/game';
+  import { playBoardSound } from '$lib/utils/audio';
 
   export let whiteName: string = 'White';
   export let blackName: string = 'Black';
@@ -52,6 +53,23 @@
 
   $: topTitle = $isFlipped ? whiteTitle : blackTitle;
   $: bottomTitle = $isFlipped ? blackTitle : whiteTitle;
+
+  let lastSoundPly = -1;
+
+  $: if (currentMove && currentMove.ply !== lastSoundPly) {
+    lastSoundPly = currentMove.ply;
+
+    if (currentMove.ply > 0) {
+      const san = currentMove.san || '';
+      const isCapture = san.includes('x');
+
+      if (isCapture) {
+        playBoardSound('capture');
+      } else {
+        playBoardSound('move');
+      }
+    }
+  }
 
   $: {
     let autoShapes: any[] = [];
