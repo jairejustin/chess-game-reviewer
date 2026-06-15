@@ -15,6 +15,7 @@
     engineOn,
     mountExplorer,
     unmountExplorer,
+    livePVLines,
     enterVariationFromMove
   } from '$lib/stores/explorerStore';
 
@@ -22,11 +23,23 @@
   import ChessBoard from '$lib/components/board/ChessBoard.svelte';
   import ExplorerSidebar from '$lib/components/explorer/ExplorerSidebar.svelte';
   import ActionStrip from '$lib/components/ui/ActionStrip.svelte';
+  import type { EngineLine } from '$lib/types/game';
 
   $: whiteName = $selectedGame?.white.username ?? 'White';
   $: blackName = $selectedGame?.black.username ?? 'Black';
 
   $: legalDests = computeLegalDests($activeExplorerFen);
+
+  $: boardEngineLines = $livePVLines
+    .filter(line => line.uciMoves && line.uciMoves.length > 0)
+    .map((line, i) => {
+      const firstUci = line.uciMoves[0];
+      return {
+        orig: firstUci.substring(0, 2),
+        dest: firstUci.substring(2, 4),
+        rank: i + 1,
+      };
+    });
 
   function computeLegalDests(fen: string): Map<string, string[]> {
     const dests = new Map<string, string[]>();
@@ -82,6 +95,7 @@
       viewOnly={false}
       {legalDests}
       onMove={handleBoardMove}
+      engineLines={boardEngineLines}
     />
   </section>
 

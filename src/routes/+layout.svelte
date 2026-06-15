@@ -17,6 +17,20 @@
     margin: 0;
   }
 
+  /* Chessground Overrides */
+  :global(.cg-wrap svg.cg-shapes),
+  :global(.cg-wrap svg.cg-custom-svgs) {
+    z-index: 1 !important;
+  }
+
+  :global(.cg-wrap piece) {
+    z-index: 2 !important;
+  }
+  
+  :global(.cg-wrap piece.dragging) {
+    z-index: 10 !important;
+  }
+
   /* --- MAESTRO PIECE SET --- */
   :global(.cg-wrap piece.pawn.white) {
     background-image: url('/assets/pieces/maestro/wP.svg');

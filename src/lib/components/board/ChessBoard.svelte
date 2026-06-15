@@ -5,7 +5,7 @@
   import PlayerProfile from './PlayerProfile.svelte';
   import EvalBar from '../analysis/EvalBar.svelte';
   import { calculateMaterial } from '../../utils/material';
-  import type { MoveNode } from '../../types/game';
+  import type { MoveNode, EngineLine } from '../../types/game';
   import { playBoardSound } from '$lib/utils/audio';
 
   export let whiteName: string = 'White';
@@ -25,6 +25,7 @@
   export let currentMove: MoveNode | null | undefined = null;
   export let viewOnly: boolean = true;
   export let legalDests: Map<string, string[]> | undefined = undefined;
+  export let engineLines: EngineLine[] = [];
   export let onMove: ((orig: string, dest: string) => void) | undefined =
     undefined;
 
@@ -96,6 +97,15 @@
       }
     }
 
+    for (let line of engineLines) {
+      const brushName = line.rank === 3 ? 'pv3' : line.rank === 2 ? 'pv2' : 'pv1';
+      autoShapes.push({
+        orig: line.orig,
+        dest: line.dest,
+        brush: brushName,
+      });
+    }
+
     const config: any = {
       fen: fen || 'start',
       orientation: $isFlipped ? 'black' : 'white',
@@ -108,7 +118,25 @@
             color: 'transparent',
             opacity: 0,
             lineWidth: 1
-          }
+          },
+          pv1: {
+            key: '1',
+            color: '#3a7d44',
+            opacity: 0.9,
+            lineWidth: 8
+          },
+          pv2: {
+            key: '2',
+            color: '#7a8f35',
+            opacity: 0.9,
+            lineWidth: 8
+          },
+          pv3: {
+            key: '3',
+            color: '#b8992b',
+            opacity: 0.9,
+            lineWidth: 8
+          },
         },
         autoShapes,
         visible: true

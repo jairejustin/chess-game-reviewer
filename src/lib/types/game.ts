@@ -15,6 +15,12 @@ export interface MoveNode {
   bestMateIn?: number | null;
 }
 
+export interface EngineLine {
+  orig: string;
+  dest: string;
+  rank?: number;
+}
+
 export interface AnalysisProgress {
   currentPly: number;
   totalPlies: number;
