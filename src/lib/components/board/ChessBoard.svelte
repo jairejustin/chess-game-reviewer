@@ -208,7 +208,7 @@
     position: relative;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
     border-radius: 4px;
-    overflow: hidden;
+    overflow: visible;
   }
   .board {
     width: 100%;

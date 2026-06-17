@@ -18,8 +18,7 @@
   }
 
   /* Chessground Overrides */
-  :global(.cg-wrap svg.cg-shapes),
-  :global(.cg-wrap svg.cg-custom-svgs) {
+  :global(.cg-wrap svg.cg-shapes) {
     z-index: 1 !important;
   }
 
@@ -29,6 +28,11 @@
   
   :global(.cg-wrap piece.dragging) {
     z-index: 10 !important;
+  }
+
+  :global(.cg-wrap svg.cg-custom-svgs) {
+    z-index: 3 !important;
+    overflow: visible !important;
   }
 
   /* --- MAESTRO PIECE SET --- */
