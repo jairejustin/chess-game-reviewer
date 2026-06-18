@@ -1,5 +1,6 @@
 use crate::data::fetcher::{
-    fetch_chesscom_games, fetch_profile,
+    fetch_chesscom_games, fetch_chesscom_profile,
+    fetch_lichess_games, fetch_lichess_profile,
 };
 use crate::models::fetch::{
     ChessComCursor, FetchResult, PlayerProfile,
@@ -76,6 +77,10 @@ pub async fn fetch_games(
             )
             .await
         }
+        "lichess" => {
+            fetch_lichess_games(&username, cursor)
+                .await
+        }
         _ => Err(format!(
             "Unsupported platform: {}",
             platform
@@ -86,9 +91,28 @@ pub async fn fetch_games(
 #[tauri::command]
 pub async fn get_player_profile(
     username: String,
+    platform: Option<String>,
 ) -> Result<PlayerProfile, String> {
     let client = reqwest::Client::new();
-    fetch_profile(&client, &username).await
+    let target_platform = platform
+        .unwrap_or_else(|| {
+            "chesscom".to_string()
+        });
+
+    match target_platform.as_str() {
+        "lichess" => {
+            fetch_lichess_profile(
+                &client, &username,
+            )
+            .await
+        }
+        _ => {
+            fetch_chesscom_profile(
+                &client, &username,
+            )
+            .await
+        }
+    }
 }
 
 #[derive(serde::Serialize)]
