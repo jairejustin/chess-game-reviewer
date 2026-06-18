@@ -105,3 +105,67 @@ pub struct RawGamePlayer {
     pub rating: Option<u32>,
     pub result: Option<String>,
 }
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LichessRawProfile {
+    pub username: String,
+    pub title: Option<String>,
+    pub created_at: Option<u64>,
+    pub seen_at: Option<u64>,
+    pub profile: Option<LichessRawProfileInfo>,
+    pub count: Option<LichessRawCount>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LichessRawProfileInfo {
+    pub country: Option<String>,
+    pub fide_rating: Option<u64>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LichessRawCount {
+    pub followers: Option<u64>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LichessRawGame {
+    pub id: String,
+    pub pgn: Option<String>,
+    pub speed: Option<String>,
+    pub clock: Option<LichessRawClock>,
+    pub created_at: Option<u64>,
+    pub rated: Option<bool>,
+    pub players: Option<LichessRawPlayers>,
+    pub winner: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LichessRawClock {
+    pub initial: Option<u32>,
+    pub increment: Option<u32>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LichessRawPlayers {
+    pub white: Option<LichessRawGamePlayer>,
+    pub black: Option<LichessRawGamePlayer>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LichessRawGamePlayer {
+    pub user: Option<LichessRawGamePlayerUser>,
+    pub rating: Option<u32>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LichessRawGamePlayerUser {
+    pub name: Option<String>,
+}
