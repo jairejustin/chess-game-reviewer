@@ -139,6 +139,11 @@ pub fn is_material_sacrifice(
             // Indirect case: check if this piece was already compromised on
             // its existing square
             legal_see(pre_move_pos, sq)
+                + captured_val
+            // Adding captured_val to see_before in this indirect branch raises the threshold
+            // for any piece whose danger increased as a side effect of the trade.
+            // The offset should absorb that collateral increase and prevents
+            // false positive regardless of which specific square triggered it.
         };
 
         // If danger was newly introduced or strictly worsened on this square,
@@ -368,15 +373,12 @@ mod tests {
     fn test_knight_captures_a_defended_bishop_is_not_a_sacrifice(
     ) {
         let fen = "r4rk1/5ppp/8/p1P1p2q/3pPn2/P4bP1/3N1P1P/R1Q1RBK1 w - - 0 1";
-
         let move_played = "Nxf3";
-
         let is_sacrifice = run_sacrifice_test(
             fen,
             move_played,
             Color::White,
         );
-
         assert_eq!(is_sacrifice, false);
     }
 
@@ -384,15 +386,12 @@ mod tests {
     fn test_bishop_captures_h7_pawn_is_a_sacrifice(
     ) {
         let fen = "r1bq1rk1/pp1n1ppp/2n1p3/2ppP3/3P4/2PB1N2/P1P2PPP/R1BQ1RK1 w - - 0 1";
-
         let move_played = "Bxh7";
-
         let is_sacrifice = run_sacrifice_test(
             fen,
             move_played,
             Color::White,
         );
-
         assert_eq!(is_sacrifice, true);
     }
 
@@ -400,15 +399,12 @@ mod tests {
     fn test_knight_moves_to_a_square_defended_by_pawn_is_a_sacrifice(
     ) {
         let fen = "r4rk1/5ppp/6n1/p1P1p2q/3pP3/PN3bP1/5P1P/R1Q1RBK1 b - - 0 1";
-
         let move_played = "Nf4";
-
         let is_sacrifice = run_sacrifice_test(
             fen,
             move_played,
             Color::Black,
         );
-
         assert_eq!(is_sacrifice, true);
     }
 
@@ -416,15 +412,12 @@ mod tests {
     fn test_alien_gambit_my_gambit_my_legacy_is_a_sacrifice(
     ) {
         let fen = "rnbqkb1r/pp2ppp1/2p2n1p/6N1/3P4/8/PPP2PPP/R1BQKBNR w KQkq - 0 1";
-
         let move_played = "Nxf7";
-
         let is_sacrifice = run_sacrifice_test(
             fen,
             move_played,
             Color::White,
         );
-
         assert_eq!(is_sacrifice, true);
     }
 
@@ -432,9 +425,7 @@ mod tests {
     fn test_hanging_the_queen_for_mate_is_a_sacrifice(
     ) {
         let fen = "rn1qkb1r/ppp1pppp/5n2/8/2B3b1/2N2N2/PPPP1PPP/R1BQK2R w KQkq - 0 1";
-
         let move_played = "Ne5";
-
         let is_sacrifice = run_sacrifice_test(
             fen,
             move_played,
@@ -448,15 +439,12 @@ mod tests {
     fn test_taking_a_hanging_knight_is_not_a_sacrifice(
     ) {
         let fen = "8/1b6/5k2/4pp1p/3P3P/2P1K3/5PN1/8 b - - 0 1";
-
         let move_played = "Bxg2";
-
         let is_sacrifice = run_sacrifice_test(
             fen,
             move_played,
             Color::Black,
         );
-
         assert_eq!(is_sacrifice, false);
     }
 
@@ -465,15 +453,12 @@ mod tests {
     ) {
         let fen =
             "8/3k4/5bK1/4p3/8/8/8/8 b - - 0 1";
-
         let move_played = "e4";
-
         let is_sacrifice = run_sacrifice_test(
             fen,
             move_played,
             Color::Black,
         );
-
         assert_eq!(is_sacrifice, true);
     }
 
@@ -481,15 +466,25 @@ mod tests {
     fn test_hanging_knight_to_counterattack_queen_is_not_sacrifice(
     ) {
         let fen = "1rb1qrk1/1ppn1pp1/p2p1n1p/4P3/2QP3B/1P3N2/P1B2PPP/R4RK1 b - - 0 1";
-
         let move_played = "b5";
-
         let is_sacrifice = run_sacrifice_test(
             fen,
             move_played,
             Color::Black,
         );
+        assert_eq!(is_sacrifice, false);
+    }
 
+    #[test]
+    fn test_minor_piece_trade_while_also_hanging_a_knight_is_not_sacrifice(
+    ) {
+        let fen = "rn4kb/3b1p1N/1q1r2pB/pB1p2Q1/1p1N4/5P2/PPP3P1/2K1R2R w - - 0 1";
+        let move_played = "Bxd7";
+        let is_sacrifice = run_sacrifice_test(
+            fen,
+            move_played,
+            Color::White,
+        );
         assert_eq!(is_sacrifice, false);
     }
 }
