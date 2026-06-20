@@ -1,3 +1,6 @@
+use crate::models::engine_config::{
+    write_config_options, EngineConfig,
+};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{
     Child, ChildStdin, ChildStdout, Command,
@@ -17,7 +20,10 @@ pub struct UciEngine {
 }
 
 impl UciEngine {
-    pub fn new(binary_path: &str) -> Self {
+    pub fn new(
+        binary_path: &str,
+        config: &EngineConfig,
+    ) -> Self {
         let mut process =
             Command::new(binary_path)
                 .stdin(Stdio::piped())
@@ -35,31 +41,42 @@ impl UciEngine {
             stdin,
             stdout,
         };
-        engine.init();
+        engine.init(config);
         engine
     }
 
-    fn init(&mut self) {
+    fn init(&mut self, config: &EngineConfig) {
         self.send_command("uci");
         self.wait_for("uciok");
 
-        // Allocates 128MB of RAM for the engine's transposition table
+        // explicitly disable ponder
         self.send_command(
-            "setoption name Hash value 128",
+            "setoption name Ponder value false",
         );
 
-        // Allows the engine to use 2 parallel threads
-        self.send_command(
-            "setoption name Threads value 2",
-        );
-
-        // Calculates 2 PV
-        self.send_command(
-            "setoption name MultiPV value 2",
-        );
+        // Apply all user-configured options
+        self.apply_config(config);
 
         self.send_command("isready");
         self.wait_for("readyok");
+    }
+
+    /// Applies every `Some` field in `config` to a running engine.
+    ///
+    /// The caller must ensure no search is active before calling this
+    /// (send "stop" / wait for "readyok" first).
+    pub fn apply_config(
+        &mut self,
+        config: &EngineConfig,
+    ) {
+        write_config_options(
+            &mut self.stdin,
+            config,
+        )
+        .expect("failed to write engine config");
+        self.stdin.flush().expect(
+            "failed to flush stdin after config",
+        );
     }
 
     pub fn send_command(&mut self, cmd: &str) {
@@ -114,8 +131,12 @@ impl UciEngine {
         {
             let trimmed = line.trim();
 
-            if let Some((_depth, multipv, eval, pv)) =
-                Self::parse_info_line(trimmed)
+            if let Some((
+                _depth,
+                multipv,
+                eval,
+                pv,
+            )) = Self::parse_info_line(trimmed)
             {
                 let cp = match eval {
                     Evaluation::Cp(c) => c,
@@ -163,8 +184,12 @@ impl UciEngine {
 
     pub fn parse_info_line(
         line: &str,
-    ) -> Option<(usize, usize, Evaluation, Vec<String>)>
-    {
+    ) -> Option<(
+        usize,
+        usize,
+        Evaluation,
+        Vec<String>,
+    )> {
         let words: Vec<&str> =
             line.split_whitespace().collect();
         if words.first() != Some(&"info") {
@@ -172,7 +197,10 @@ impl UciEngine {
         }
 
         // Extract Depth
-        let depth = if let Some(idx) = words.iter().position(|&w| w == "depth") {
+        let depth = if let Some(idx) = words
+            .iter()
+            .position(|&w| w == "depth")
+        {
             words.get(idx + 1)?.parse().ok()?
         } else {
             0 // Default to 0 since transposition table might also omit this
@@ -245,7 +273,8 @@ mod tests {
         let result =
             UciEngine::parse_info_line(line);
         assert!(result.is_some());
-        let (_, multipv, eval, pv) = result.unwrap();
+        let (_, multipv, eval, pv) =
+            result.unwrap();
         assert_eq!(multipv, 1);
         assert_eq!(eval, Evaluation::Cp(30));
         assert_eq!(pv, vec!["d2d4", "e7e6"]);
