@@ -238,3 +238,58 @@ pub fn cancel_analysis(
         .store(true, Ordering::Relaxed);
     Ok(())
 }
+
+/// Updates engine settings live without restarting the engine process.
+///
+/// Only the fields present (non-null from the frontend) are applied.
+/// The new config is persisted in `AppState` so it survives engine
+/// restarts and is used by the batch analysis pipeline.
+///
+/// It is safe to call this at any time since the live engine will pause
+/// its current search, apply the new options, then sit idle until
+/// the next `analyze_live_position` call.
+#[tauri::command]
+pub async fn configure_engine(
+    config: EngineConfig,
+    state: State<'_, LiveEngineManager>,
+    app_state: State<'_, AppState>,
+) -> Result<(), String> {
+    // Merge into the stored config so fields not sent by this call are preserved.
+    {
+        let mut stored = app_state
+            .engine_config
+            .lock()
+            .unwrap();
+        if let Some(v) = config.hash_mb {
+            stored.hash_mb = Some(v);
+        }
+        if let Some(v) = config.threads {
+            stored.threads = Some(v);
+        }
+        if let Some(v) = config.multi_pv {
+            stored.multi_pv = Some(v);
+        }
+        if let Some(v) = config.analysis_time_ms {
+            stored.analysis_time_ms = Some(v);
+        }
+    }
+
+    // Forward to the live engine (if running) so changes take effect immediately.
+    state
+        .tx
+        .send(LiveCommand::Configure { config })
+        .map_err(|e| e.to_string())
+}
+
+/// Returns the currently active engine configuration.
+/// Use this to populate a settings panel on load.
+#[tauri::command]
+pub fn get_engine_config(
+    app_state: State<'_, AppState>,
+) -> EngineConfig {
+    app_state
+        .engine_config
+        .lock()
+        .unwrap()
+        .clone()
+}
