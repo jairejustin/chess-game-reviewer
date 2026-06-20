@@ -91,23 +91,22 @@ engineWatcher.subscribe(({ fen, on }) => {
         ? 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
         : fen;
 
-    const searchFen = fen;
-    activeSearchFen = searchFen;
+    activeSearchFen = uciFen;
     pendingLines.clear();
 
     invoke('analyze_live_position', { fen: uciFen, multipv: 3 }).catch(
       (err) => {
         console.error('Engine invoke error:', err);
-        if (activeSearchFen === searchFen) {
+        if (activeSearchFen === uciFen) {
           engineStatus.set('paused');
         }
       }
     );
 
     engineHeartbeat = setTimeout(() => {
-      if (activeSearchFen !== searchFen) return;
+      if (activeSearchFen !== uciFen) return;
       try {
-        const chess = new Chess(searchFen === 'start' ? undefined : searchFen);
+        const chess = new Chess(fen === 'start' ? undefined : fen);
         if (chess.isGameOver()) {
           handleTerminalState(chess);
         }
@@ -217,20 +216,11 @@ export async function mountExplorer(gameMoves: MoveNode[], startIndex: number) {
   explorerIndex.set(startIndex);
 
   unlistenEngine = await listen<any>('live-engine-info', (event) => {
-    const currentFenValue = get(activeExplorerFen);
-    console.log(
-      'match:',
-      currentFenValue === activeSearchFen,
-      '\nexplorerFen:',
-      currentFenValue,
-      '\nsearchFen:',
-      activeSearchFen
-    );
-    if (currentFenValue !== activeSearchFen) return;
+    const { fen: payloadFen, depth, multipv, evaluation, pv } = event.payload;
+
+    if (payloadFen !== activeSearchFen) return;
 
     clearTimeout(engineHeartbeat);
-
-    const { depth, multipv, evaluation, pv } = event.payload;
 
     currentDepth.set(depth);
 
@@ -240,7 +230,7 @@ export async function mountExplorer(gameMoves: MoveNode[], startIndex: number) {
 
     if (isStable) {
       const line = uciLineToPVLine(
-        currentFenValue,
+        payloadFen,
         pv,
         formatted,
         cp,
@@ -250,21 +240,24 @@ export async function mountExplorer(gameMoves: MoveNode[], startIndex: number) {
       if (!line) return;
       pendingLines.set(multipv, line);
 
-      if (flushTimer) clearTimeout(flushTimer);
-      flushTimer = setTimeout(() => {
-        const sorted = Array.from(pendingLines.values()).sort(
-          (a, b) => a.index - b.index
-        );
-        livePVLines.set(sorted);
+      if (!flushTimer) {
+        flushTimer = setTimeout(() => {
+          const sorted = Array.from(pendingLines.values()).sort(
+            (a, b) => a.index - b.index
+          );
+          livePVLines.set(sorted);
 
-        const best = pendingLines.get(1);
-        if (best) {
-          liveEval.set(best.evalCp);
-          liveMateIn.set(best.mateIn);
-        }
+          const best = pendingLines.get(1);
+          if (best) {
+            liveEval.set(best.evalCp);
+            liveMateIn.set(best.mateIn);
+          }
 
-        engineStatus.set('thinking');
-      }, 60);
+          engineStatus.set('thinking');
+          
+          flushTimer = null; 
+        }, 60);
+      }
     }
   });
 

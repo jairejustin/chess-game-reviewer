@@ -1,7 +1,8 @@
 use serde::Serialize;
+use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
@@ -30,6 +31,7 @@ pub struct LiveEngineManager {
 
 #[derive(Clone, Serialize)]
 pub struct LivePayload {
+    pub fen: String,
     pub depth: usize,
     pub multipv: usize,
     pub evaluation: String,
@@ -63,6 +65,8 @@ pub fn init_live_manager(
             // it's tracked in case we have to restart it.
             let mut current_binary: Option<String> = None;
 
+            let current_fen: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
+
             while let Some(cmd) = rx.recv().await {
                 match cmd {
                     // Spawn the engine process if not already running
@@ -70,12 +74,12 @@ pub fn init_live_manager(
                         if engine_tx.is_some() {
                             continue; // already running
                         }
-
                         current_binary = Some(binary_path.clone());
                         engine_tx = Some(spawn_engine(
                             &binary_path,
                             app_handle.clone(),
                             is_white_turn.clone(),
+                            current_fen.clone(),
                         ));
                     }
 
@@ -87,7 +91,7 @@ pub fn init_live_manager(
                     }
 
                     // Sends a new position to search
-                    LiveCommand::Analyze { fen, multipv } => {
+                    LiveCommand::Analyze { fen: _, multipv: _ } => {
                         // If the engine died (stdout loop exited -> tx is closed), restart it
                         // transparently before forwarding the command.
                         if let Some(tx) = &engine_tx {
@@ -103,6 +107,7 @@ pub fn init_live_manager(
                                     path,
                                     app_handle.clone(),
                                     is_white_turn.clone(),
+                                    current_fen.clone(),
                                 ));
                             } else {
                                 eprintln!("[live_manager] Analyze received but no engine binary known");
@@ -111,7 +116,7 @@ pub fn init_live_manager(
                         }
 
                         if let Some(tx) = &engine_tx {
-                            let _ = tx.send(LiveCommand::Analyze { fen, multipv });
+                            let _ = tx.send(cmd);
                         }
                     }
 
@@ -138,21 +143,30 @@ fn spawn_engine(
     binary_path: &str,
     app_handle: AppHandle,
     is_white_turn: Arc<AtomicBool>,
+    current_fen: Arc<Mutex<String>>,
 ) -> mpsc::UnboundedSender<LiveCommand> {
     let engine = UciEngine::new(binary_path);
     let (_child, stdin, stdout) = engine.unpack();
     let (internal_tx, internal_rx) =
         mpsc::unbounded_channel();
 
+    // The atomic barrier ensures synchronization between stdin/stdout loops
+    let ready_barrier =
+        Arc::new(AtomicBool::new(true));
+
     spawn_stdin_loop(
         stdin,
         internal_rx,
         is_white_turn.clone(),
+        ready_barrier.clone(),
+        current_fen.clone(),
     );
     spawn_stdout_loop(
         stdout,
         app_handle,
         is_white_turn,
+        current_fen,
+        ready_barrier,
     );
 
     internal_tx
@@ -162,6 +176,8 @@ fn spawn_stdin_loop(
     mut stdin: std::process::ChildStdin,
     mut rx: mpsc::UnboundedReceiver<LiveCommand>,
     is_white_turn: Arc<AtomicBool>,
+    ready_barrier: Arc<AtomicBool>,
+    current_fen: Arc<Mutex<String>>,
 ) {
     task::spawn_blocking(move || {
         while let Some(cmd) = rx.blocking_recv() {
@@ -182,20 +198,59 @@ fn spawn_stdin_loop(
                     is_white_turn.store(
                         is_white,
                         Ordering::SeqCst,
-                    ); // SeqCst: visible to stdout thread immediately
+                    );
 
-                    writeln!(stdin, "stop")
-                        .and_then(|_| writeln!(stdin, "setoption name MultiPV value {}", multipv))
+                    // Lock the barrier
+                    ready_barrier.store(
+                        false,
+                        Ordering::SeqCst,
+                    );
+
+                    let write_result =
+                        writeln!(stdin, "stop")
+                            .and_then(|_| {
+                                writeln!(
+                                    stdin,
+                                    "isready"
+                                )
+                            })
+                            .and_then(|_| {
+                                stdin.flush()
+                            });
+
+                    if write_result.is_err() {
+                        break;
+                    }
+
+                    // Spin wait until the stdout loop unlocks the barrier upon seeing "readyok"
+                    while !ready_barrier
+                        .load(Ordering::SeqCst)
+                    {
+                        std::thread::sleep(
+                            Duration::from_millis(
+                                1,
+                            ),
+                        );
+                    }
+
+                    // Update the FEN lock safely
+                    *current_fen
+                        .lock()
+                        .unwrap() = fen.clone();
+
+                    writeln!(stdin, "setoption name MultiPV value {}", multipv)
                         .and_then(|_| writeln!(stdin, "position fen {}", fen))
                         .and_then(|_| writeln!(stdin, "go infinite"))
                         .and_then(|_| stdin.flush())
                 }
+
                 LiveCommand::Stop => {
                     writeln!(stdin, "stop")
                         .and_then(|_| {
                             stdin.flush()
                         })
                 }
+
                 LiveCommand::Terminate => {
                     let _ =
                         writeln!(stdin, "quit")
@@ -204,6 +259,7 @@ fn spawn_stdin_loop(
                             });
                     break;
                 }
+
                 LiveCommand::Start { .. } => {
                     Ok(())
                 }
@@ -221,12 +277,16 @@ fn spawn_stdout_loop(
     stdout: BufReader<std::process::ChildStdout>,
     app_handle: AppHandle,
     is_white_turn: Arc<AtomicBool>,
+    current_fen: Arc<Mutex<String>>,
+    ready_barrier: Arc<AtomicBool>,
 ) {
     task::spawn_blocking(move || {
         let mut reader = stdout;
         let mut line = String::new();
-        let mut last_emit_times: std::collections::HashMap<usize, Instant> =
-            std::collections::HashMap::new();
+        let mut last_emit_times: HashMap<
+            usize,
+            Instant,
+        > = HashMap::new();
 
         loop {
             line.clear();
@@ -246,9 +306,17 @@ fn spawn_stdout_loop(
 
             let trimmed = line.trim();
 
-            // Skip "bestmove (none)", ut just means a terminal position, engine has nothing to say.
-            // Its where mate is already played or calculated such that engine doesn't even bother
-            // analyzing the position then it just completely pauses.
+            if trimmed == "readyok" {
+                // Instantly unblock the stdin loop
+                ready_barrier.store(
+                    true,
+                    Ordering::SeqCst,
+                );
+
+                last_emit_times.clear();
+                continue;
+            }
+
             if trimmed.starts_with("bestmove") {
                 continue;
             }
@@ -313,21 +381,27 @@ fn spawn_stdout_loop(
                             50,
                         )
                 {
-                    let payload = LivePayload {
-                        depth,
-                        multipv,
-                        evaluation: format_eval(
-                            normalized_eval,
-                        ),
-                        pv: pv_moves,
-                    };
+                    let fen = current_fen
+                        .lock()
+                        .unwrap()
+                        .clone();
 
-                    let _ = app_handle.emit(
-                        "live-engine-info",
-                        payload,
-                    );
-                    last_emit_times
-                        .insert(multipv, now);
+                    if !fen.is_empty() {
+                        let payload = LivePayload {
+                            fen: fen.clone(),
+                            depth,
+                            multipv,
+                            evaluation: format_eval(normalized_eval),
+                            pv: pv_moves,
+                        };
+
+                        let _ = app_handle.emit(
+                            "live-engine-info",
+                            payload,
+                        );
+                        last_emit_times
+                            .insert(multipv, now);
+                    }
                 }
             }
         }
