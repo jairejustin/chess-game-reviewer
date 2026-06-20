@@ -2,6 +2,7 @@ use crate::data::fetcher::{
     fetch_chesscom_games, fetch_chesscom_profile,
     fetch_lichess_games, fetch_lichess_profile,
 };
+use crate::models::engine_config::EngineConfig;
 use crate::models::fetch::{
     ChessComCursor, FetchResult, PlayerProfile,
 };
@@ -31,12 +32,21 @@ pub fn analyze_game(
     target_time_ms: Option<u32>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    // The search time for the UCI chess engine
-    let time_ms = target_time_ms.unwrap_or(1500);
+    // Prefer the caller's one-shot override, then the user-configured value, then the default.
+    let time_ms =
+        target_time_ms.unwrap_or_else(|| {
+            state
+                .engine_config
+                .lock()
+                .unwrap()
+                .analysis_time_ms
+                .unwrap_or(1500)
+        });
 
     // Clone the paths/arcs for the background thread
     let engine_path = state.engine_path.clone();
     let book = state.opening_book.clone();
+    let config = state.engine_config.clone();
 
     // Reset the flag to false before starting a new analysis
     state
@@ -55,6 +65,7 @@ pub fn analyze_game(
             engine_path,
             book,
             cancel_flag,
+            config,
         ) {
             let _ =
                 app.emit("analysis-error", &e);
