@@ -2,6 +2,7 @@ use crate::data::book::OpeningBook;
 use crate::data::pgn::PgnVisitor;
 use crate::heuristics::accuracy::calculate_accuracy;
 use crate::heuristics::context::evaluate_move_context;
+use crate::models::engine_config::EngineConfig;
 use crate::models::game::{
     AnalysisProgress, AnalysisSummary,
     AnalyzedMove, MoveCounts,
@@ -32,9 +33,20 @@ pub fn run_analysis_pipeline(
     engine_path: String,
     book: Arc<OpeningBook>,
     cancel_flag: Arc<AtomicBool>,
+    config: Arc<std::sync::Mutex<EngineConfig>>,
 ) -> Result<(), String> {
     app.emit("analysis-started", ())
         .map_err(|e| e.to_string())?;
+
+    // Snapshot the config once for the lifetime of this pipeline run.
+    // Changes made via configure_engine during analysis take effect on the next run.
+    let config = config.lock().unwrap().clone();
+
+    // Deep re-analysis budget: give it ~2.5× the normal per-move time,
+    // clamped to a minimum of 3 seconds so fast configs still investigate properly.
+    let deep_time_ms =
+        (time_ms as f32 * 2.5) as u32;
+    let deep_time_ms = deep_time_ms.max(3000);
 
     // Visitor impl used to construct the game metadata and track positions
     let mut visitor = PgnVisitor::new();
@@ -54,7 +66,8 @@ pub fn run_analysis_pipeline(
             }
         };
 
-    let mut engine = UciEngine::new(&engine_path);
+    let mut engine =
+        UciEngine::new(&engine_path, &config);
 
     // Starting position
     let initial_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -296,10 +309,9 @@ pub fn run_analysis_pipeline(
 
         if san == best_move_san && eval_drop > 60
         {
-            // 3.5s investigation allocation
             let deep_cmd = format!(
                 "go depth 24 movetime {}",
-                3500
+                deep_time_ms
             );
 
             // Re-evaluate the previous position deeply
