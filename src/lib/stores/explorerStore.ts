@@ -33,6 +33,7 @@ export const currentDepth = writable<number>(0);
 let analyzeTimeout: ReturnType<typeof setTimeout>;
 let engineHeartbeat: ReturnType<typeof setTimeout>;
 let activeSearchFen = '';
+let mateAlreadyHandled = false;
 
 function handleTerminalState(chess: Chess) {
   if (chess.isCheckmate()) {
@@ -61,6 +62,7 @@ engineWatcher.subscribe(({ fen, on }) => {
   clearTimeout(analyzeTimeout);
   clearTimeout(engineHeartbeat);
   activeSearchFen = '';
+  mateAlreadyHandled = false;
 
   if (!on) {
     invoke('stop_live_analysis').catch(console.error);
@@ -93,6 +95,7 @@ engineWatcher.subscribe(({ fen, on }) => {
 
     activeSearchFen = uciFen;
     pendingLines.clear();
+    mateAlreadyHandled = false;
 
     invoke('analyze_live_position', { fen: uciFen, multipv: 3 }).catch(
       (err) => {
@@ -219,14 +222,49 @@ export async function mountExplorer(gameMoves: MoveNode[], startIndex: number) {
     const { fen: payloadFen, depth, multipv, evaluation, pv } = event.payload;
 
     if (payloadFen !== activeSearchFen) return;
+    // Drop all further events once a mate has been confirmed and stop has been
+    // dispatched. The engine keeps emitting until Rust actually halts, so this
+    // guard is the only thing preventing a flood of redundant store writes.
+    if (mateAlreadyHandled) return;
 
     clearTimeout(engineHeartbeat);
 
-    currentDepth.set(depth);
-
     const { cp, mateIn, formatted } = parseRawEngineEval(evaluation);
     const isMate = mateIn !== null;
-    const isStable = depth >= STABLE_DEPTH || isMate;
+
+    // Handle mate immediately and synchronously
+    if (isMate && multipv === 1) {
+      mateAlreadyHandled = true;
+
+      if (flushTimer) {
+        clearTimeout(flushTimer);
+        flushTimer = null;
+      }
+      pendingLines.clear();
+
+      currentDepth.set(99);
+      engineStatus.set('paused');
+      invoke('stop_live_analysis').catch(console.error);
+
+      const line = uciLineToPVLine(
+        payloadFen,
+        pv,
+        formatted,
+        cp,
+        mateIn,
+        multipv
+      );
+      if (line) {
+        liveEval.set(cp);
+        liveMateIn.set(mateIn);
+        livePVLines.set([line]);
+      }
+      return;
+    }
+
+    currentDepth.set(depth);
+
+    const isStable = depth >= STABLE_DEPTH;
 
     if (isStable) {
       const line = uciLineToPVLine(
@@ -254,8 +292,7 @@ export async function mountExplorer(gameMoves: MoveNode[], startIndex: number) {
           }
 
           engineStatus.set('thinking');
-          
-          flushTimer = null; 
+          flushTimer = null;
         }, 60);
       }
     }
