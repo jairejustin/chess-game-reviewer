@@ -3,13 +3,15 @@ use crate::heuristics::classify::{
 };
 use crate::heuristics::see::{
     get_target_square, is_material_sacrifice,
+    legal_see, piece_value,
 };
 use crate::models::game::MoveBadge;
 use crate::uci::evaluation::white_to_moving_pov;
 
 use shakmaty::san::San;
 use shakmaty::{
-    fen::Fen, CastlingMode, Chess, Position,
+    fen::Fen, CastlingMode, Chess, Move,
+    Position, Role,
 };
 
 /// Sums non-pawn material points for both sides on the given board,
@@ -30,6 +32,57 @@ fn count_non_pawn_material(
             _ => 0, // Pawns and Kings excluded
         })
         .sum()
+}
+
+/// Evaluates if an only King move out of check was the only logical choice instead of
+/// chucking free pieces at the opponent.
+pub fn is_trivial_check_evasion(
+    pre_pos: &Chess,
+    played_move: &Move,
+) -> bool {
+    if !pre_pos.is_check() {
+        return false;
+    }
+
+    if played_move.role() != Role::King {
+        return false;
+    }
+
+    let legal_moves = pre_pos.legal_moves();
+
+    // If there is more than one legal square for the King to step to,
+    // finding the only winning square is a genuine critical position.
+    let king_escape_count = legal_moves
+        .iter()
+        .filter(|m| m.role() == Role::King)
+        .count();
+    if king_escape_count > 1 {
+        return false;
+    }
+    // Evaluates all non-king moves (blocks or captures)
+    for alt_move in legal_moves
+        .iter()
+        .filter(|m| m.role() != Role::King)
+    {
+        let post_alt_pos = pre_pos
+            .clone()
+            .play(*alt_move)
+            .unwrap();
+
+        let see_value = legal_see(
+            &post_alt_pos,
+            alt_move.to(),
+        );
+
+        let piece_val =
+            piece_value(alt_move.role());
+
+        if see_value < piece_val - 2 {
+            return false;
+        }
+    }
+
+    true
 }
 
 /// Assembles all heuristic flags from the pre- and post-move board state,
@@ -184,6 +237,16 @@ pub fn evaluate_move_context(
     let is_best_engine_move =
         san == best_move_san;
 
+    let is_trivial_check_evasion = match (
+        prev_pos.as_ref(),
+        played_move.as_ref(),
+    ) {
+        (Some(pre), Some(mv)) => {
+            is_trivial_check_evasion(pre, mv)
+        }
+        _ => false,
+    };
+
     // Construct classification arguments
     let classify_args = ClassifyArgs {
         is_book: is_book_flag,
@@ -202,6 +265,7 @@ pub fn evaluate_move_context(
         best_mate: best_mate_pov,
         played_mate: played_mate_pov,
         is_endgame,
+        is_trivial_check_evasion,
     };
 
     classify(classify_args)
@@ -221,90 +285,53 @@ mod tests {
             .expect("Invalid position")
     }
 
-    /// `evaluate_move_context` but it runs classification directly from board state + logical hardcoded eval values,
-    /// skipping most of the fields. Supply it with the centipawn scores as if the
-    /// engine had returned them
-    fn evaluate_position_context(
-        prev_fen: &str,
-        san: &str,
-        post_fen: &str,
-        prev_eval: i32, // moving player POV
-        played_eval: i32, // moving player POV
-        prev_best_eval: i32, // moving player POV
-        multi_pv_evals: &[i32], // moving player POV
-        ply: u32, // odd = white moving
-        played_mate: Option<i32>,
-        best_mate: Option<i32>,
-    ) -> MoveBadge {
-        use crate::heuristics::classify::{
-            classify, ClassifyArgs,
-        };
-        use crate::heuristics::see::is_material_sacrifice;
-        use shakmaty::san::San;
-
-        let is_delivering_mate =
-            played_mate.map_or(false, |m| m > 0);
-
-        let is_white_moving = ply % 2 != 0;
-
-        let prev_pos = pos(prev_fen);
-        let post_pos = pos(post_fen);
-
-        let played_move =
-            San::from_ascii(san.as_bytes())
-                .expect("Invalid SAN")
-                .to_move(&prev_pos)
-                .expect("Illegal move");
-
-        let color = if is_white_moving {
-            shakmaty::Color::White
-        } else {
-            shakmaty::Color::Black
-        };
-
-        let is_losing_material =
-            is_material_sacrifice(
-                &prev_pos,
-                &post_pos,
-                &played_move,
-                color,
-            );
-
-        let is_endgame = count_non_pawn_material(
-            prev_pos.board(),
-        ) <= 26;
-
-        let classify_args = ClassifyArgs {
-            prev_eval,
-            played_eval,
-            prev_best_eval,
-            multi_pv_evals,
-            is_losing_material,
-            is_endgame,
-            is_delivering_mate,
-            played_mate,
-            best_mate,
-            ..Default::default()
-        };
-
-        classify(classify_args).0
-    }
-
     #[test]
-    fn queen_sac_for_mate_in_3_is_brilliant() {
-        let badge = evaluate_position_context(
-            "rnb1kb1r/pp3ppp/2p5/4q3/4n3/3Q4/PPPB1PPP/2KR1BNR w kq - 0 1",
+    fn test_queen_sac_for_mate_in_3_is_brilliant()
+    {
+        let (badge, _accuracy) = evaluate_move_context(
             "Qd8+",
             "rnbQkb1r/pp3ppp/2p5/4q3/4n3/8/PPPB1PPP/2KR1BNR b kq - 0 1",
+            "O-O-O",                                                      
+            "rnb1kb1r/pp3ppp/2p5/4q3/4n3/3Q4/PPPB1PPP/2KR1BNR w kq - 0 1",
+            "Qd8+",                                                        
             100,
             10000,
-            10000,
+            50.0,
             &[10000, 100],
             9,
+            false,
+            false,
             Some(3),
             Some(3),
         );
+
         assert_eq!(badge, MoveBadge::Brilliant);
+    }
+
+    #[test]
+    fn test_trivial_check_evasion_downgrades_great_to_best(
+    ) {
+        let (badge, _) = evaluate_move_context(
+            "Ka2",
+            "5rkb/2NR1p1p/6pP/p1p3P1/PpQ2P2/8/KPP5/7q b - - 1 1",
+            "Qh1+",
+            "5rkb/2NR1p1p/6pP/p1p3P1/PpQ2P2/8/1PP5/1K5q w - - 0 1",
+            "Ka2",
+            400,
+            400,
+            0.0,
+            &[390, -500],
+            31,
+            false,
+            false,
+            None,
+            None,
+        );
+
+        // The math says "Great" because of the huge drop to the 2nd PV,
+        // but the board state proves it was just a very logical only move
+        // and it is not really critical.
+        assert_eq!(badge, MoveBadge::Best);
     }
 
     #[test]
@@ -319,7 +346,7 @@ mod tests {
         );
 
         // Endgame threshold position (<= 26).
-        // 1 rook (5) + 1 knight (3) per side = 16 total.
+        // rook (5) + knight (3) per side = 16 total.
         let endgame_pos = pos("8/4k3/8/2n1r3/3R1N2/8/3K4/8 w - - 0 1");
         assert_eq!(
             count_non_pawn_material(

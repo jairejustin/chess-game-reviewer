@@ -31,6 +31,7 @@ pub struct ClassifyArgs<'a> {
     /// falls below the endgame threshold (~26 points using standard piece values).
     /// Computed from the pre-move board state in `evaluate_move_context`.
     pub is_endgame: bool,
+    pub is_trivial_check_evasion: bool,
 }
 
 impl<'a> Default for ClassifyArgs<'a> {
@@ -51,6 +52,7 @@ impl<'a> Default for ClassifyArgs<'a> {
             best_mate: None,
             played_mate: None,
             is_endgame: false,
+            is_trivial_check_evasion: false,
         }
     }
 }
@@ -259,6 +261,13 @@ pub fn classify(
         )
     {
         classification = MoveBadge::Great;
+    }
+
+    //if an only King move out of check was the only logical choice instead of chucking pieces
+    if classification == MoveBadge::Great
+        && args.is_trivial_check_evasion
+    {
+        classification = MoveBadge::Best;
     }
 
     // BRILLIANT MOVE: we use Static Exchange Evaluation (SEE) to confirm a piece is *actually* hanging.
