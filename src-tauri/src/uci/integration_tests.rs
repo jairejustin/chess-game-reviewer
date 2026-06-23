@@ -25,7 +25,8 @@ fn default_engine() -> UciEngine {
 // A UCI move is either 4 chars (e.g. "e2e4") or 5 for promotions (e.g. "e7e8q").
 fn is_valid_uci_move(s: &str) -> bool {
     matches!(s.len(), 4 | 5)
-        && s.chars().all(|c| c.is_ascii_alphanumeric())
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric())
 }
 
 // Startup and teardown
@@ -49,7 +50,8 @@ fn quit_shuts_down_cleanly() {
 
 #[test]
 #[ignore = "Requires Engine binary"]
-fn apply_config_with_non_default_values_does_not_break_engine() {
+fn apply_config_with_non_default_values_does_not_break_engine(
+) {
     let mut engine = default_engine();
 
     engine.apply_config(&EngineConfig {
@@ -86,10 +88,11 @@ fn apply_config_with_all_none_is_a_noop() {
 fn starting_position_returns_valid_best_move() {
     let mut engine = default_engine();
 
-    let (_, best_move, _, _) = engine.analyze_position(
-        "position startpos",
-        "go movetime 100",
-    );
+    let (_, best_move, _, _) = engine
+        .analyze_position(
+            "position startpos",
+            "go movetime 100",
+        );
 
     assert!(
         is_valid_uci_move(&best_move),
@@ -105,10 +108,11 @@ fn starting_position_returns_valid_best_move() {
 fn starting_position_eval_is_near_zero() {
     let mut engine = default_engine();
 
-    let (eval, _, _, _) = engine.analyze_position(
-        "position startpos",
-        "go movetime 100",
-    );
+    let (eval, _, _, _) = engine
+        .analyze_position(
+            "position startpos",
+            "go movetime 100",
+        );
 
     let cp = match eval {
         Evaluation::Cp(cp) => cp,
@@ -136,7 +140,10 @@ fn starting_position_returns_non_empty_pv() {
         "go movetime 100",
     );
 
-    assert!(!pv.is_empty(), "PV should not be empty");
+    assert!(
+        !pv.is_empty(),
+        "PV should not be empty"
+    );
     assert!(
         pv.iter().all(|m| is_valid_uci_move(m)),
         "all PV moves should be valid UCI moves, got: {:?}",
@@ -148,17 +155,19 @@ fn starting_position_returns_non_empty_pv() {
 
 #[test]
 #[ignore = "Requires Engine binary"]
-fn mate_in_one_position_returns_mate_evaluation() {
+fn mate_in_one_position_returns_mate_evaluation()
+{
     let mut engine = default_engine();
 
     // FEN: White to move, Qxf7# is the mating move
     let fen =
         "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4";
 
-    let (eval, best_move, _, _) = engine.analyze_position(
-        &format!("position fen {}", fen),
-        "go movetime 500",
-    );
+    let (eval, best_move, _, _) = engine
+        .analyze_position(
+            &format!("position fen {}", fen),
+            "go movetime 500",
+        );
 
     assert_eq!(
         eval,
@@ -181,20 +190,25 @@ fn sequential_calls_do_not_bleed_state() {
     let mut engine = default_engine();
 
     let fen = "8/8/8/8/8/4k3/8/3qK3 b - - 0 1";
-    let is_white = fen.split_whitespace().nth(1).unwrap_or("w") == "w";
+    let is_white = fen
+        .split_whitespace()
+        .nth(1)
+        .unwrap_or("w")
+        == "w";
 
-    let (eval2, _, _, _) = engine.analyze_position(
-        &format!("position fen {}", fen),
-        "go movetime 100",
-    );
+    let (eval2, _, _, _) = engine
+        .analyze_position(
+            &format!("position fen {}", fen),
+            "go movetime 100",
+        );
 
     let normalized = match eval2 {
-        Evaluation::Mate(m) => {
-            Evaluation::Mate(engine_to_white_pov(m, is_white))
-        }
-        Evaluation::Cp(cp) => {
-            Evaluation::Cp(engine_to_white_pov(cp, is_white))
-        }
+        Evaluation::Mate(m) => Evaluation::Mate(
+            engine_to_white_pov(m, is_white),
+        ),
+        Evaluation::Cp(cp) => Evaluation::Cp(
+            engine_to_white_pov(cp, is_white),
+        ),
     };
 
     assert!(

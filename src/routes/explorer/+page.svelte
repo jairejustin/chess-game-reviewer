@@ -31,13 +31,13 @@
   $: legalDests = computeLegalDests($activeExplorerFen);
 
   $: boardEngineLines = $livePVLines
-    .filter(line => line.uciMoves && line.uciMoves.length > 0)
+    .filter((line) => line.uciMoves && line.uciMoves.length > 0)
     .map((line, i) => {
       const firstUci = line.uciMoves[0];
       return {
         orig: firstUci.substring(0, 2),
         dest: firstUci.substring(2, 4),
-        rank: i + 1,
+        rank: i + 1
       };
     });
 

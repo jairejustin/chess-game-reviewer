@@ -25,7 +25,7 @@
   :global(.cg-wrap piece) {
     z-index: 2 !important;
   }
-  
+
   :global(.cg-wrap piece.dragging) {
     z-index: 10 !important;
   }

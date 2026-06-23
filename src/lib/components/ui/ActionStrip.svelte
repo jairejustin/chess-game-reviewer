@@ -11,7 +11,7 @@
   $: isExplorer = page.url.pathname.startsWith('/explorer');
 
   function toggleExplorer() {
-    if (isExplorer) { 
+    if (isExplorer) {
       goto('/');
     } else {
       goto('/explorer');

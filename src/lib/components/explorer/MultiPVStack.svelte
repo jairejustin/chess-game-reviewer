@@ -34,14 +34,13 @@
 <div class="multipv">
   <div class="multipv__header">
     <span class="multipv__label">Engine Lines</span>
-    
+
     {#if active && (status === 'thinking' || status === 'starting')}
       <span class="multipv__depth">
         DEPTH {depth}
       </span>
     {/if}
   </div>
-  
 
   <div class="multipv__lines">
     {#if isTerminal}
@@ -80,7 +79,7 @@
                 <Figurine {san} />
               </span>
             {/each}
-            
+
             {#if line.sanMoves.length > 5}
               <span class="multipv__overflow">+{line.sanMoves.length - 5}</span>
             {/if}
@@ -200,7 +199,7 @@
     flex-wrap: wrap;
     gap: 2px 6px;
     font-size: 0.9rem;
-    color: #888888; 
+    color: #888888;
     font-family: 'Outfit', sans-serif;
     min-width: 0;
     overflow: hidden;
@@ -221,7 +220,6 @@
   .eval--mate-black {
     color: #e06060;
   }
-
 
   .multipv__move {
     white-space: nowrap;

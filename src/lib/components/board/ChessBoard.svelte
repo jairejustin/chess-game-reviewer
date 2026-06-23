@@ -98,11 +98,12 @@
     }
 
     for (let line of engineLines) {
-      const brushName = line.rank === 3 ? 'pv3' : line.rank === 2 ? 'pv2' : 'pv1';
+      const brushName =
+        line.rank === 3 ? 'pv3' : line.rank === 2 ? 'pv2' : 'pv1';
       autoShapes.push({
         orig: line.orig,
         dest: line.dest,
-        brush: brushName,
+        brush: brushName
       });
     }
 
@@ -136,7 +137,7 @@
             color: '#b8992b',
             opacity: 0.9,
             lineWidth: 8
-          },
+          }
         },
         autoShapes,
         visible: true
