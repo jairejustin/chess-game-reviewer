@@ -1,12 +1,22 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { isAnalyzing } from '$lib/stores/reviewStore';
+  import { invoke } from '@tauri-apps/api/core';
+
+  import {
+    isAnalyzing,
+    analysisSummary,
+    sidebarView
+  } from '$lib/stores/reviewStore';
+  import { selectedGame } from '$lib/stores/fetchStore';
+  import { activePly, isFlipped } from '$lib/stores/boardStore';
 
   import Microscope from 'lucide-svelte/icons/microscope';
   import LayoutDashboard from 'lucide-svelte/icons/layout-dashboard';
   import Settings from 'lucide-svelte/icons/settings';
-  import BookOpen from 'lucide-svelte/icons/book-open';
+  import Play from 'lucide-svelte/icons/play';
+  import CircleStar from 'lucide-svelte/icons/circle-star';
+  import ArrowUpDown from 'lucide-svelte/icons/arrow-up-down';
 
   $: isExplorer = page.url.pathname.startsWith('/explorer');
 
@@ -18,11 +28,30 @@
     }
   }
 
+  function toggleFlip() {
+    $isFlipped = !$isFlipped;
+  }
+
   $: explorerTitle = $isAnalyzing
     ? 'Cannot open Explorer while analyzing'
     : isExplorer
       ? 'Back to Game Review'
       : 'Open Live Explorer';
+
+  async function runAnalysis() {
+    if (!$selectedGame) return;
+    try {
+      await invoke('analyze_game', { pgn: $selectedGame.pgn });
+      $sidebarView = 'game';
+    } catch (e) {
+      console.error('Analysis runtime tracking breakdown error:', e);
+    }
+  }
+
+  function startReview() {
+    $activePly = 0;
+    $sidebarView = 'game';
+  }
 </script>
 
 <div class="action-strip">
@@ -40,13 +69,41 @@
     {/if}
   </button>
 
-  <div class="action-strip__divider"></div>
-
-  <button class="action-strip__btn" title="Placeholder" disabled>
-    <BookOpen size={30} strokeWidth={2} />
+  <button
+    class="action-strip__btn"
+    class:action-strip__btn--active={$isAnalyzing}
+    on:click={runAnalysis}
+    disabled={$isAnalyzing ||
+      !$selectedGame ||
+      !!$analysisSummary ||
+      isExplorer}
+    title="Game Review"
+  >
+    <CircleStar size={30} strokeWidth={2} />
   </button>
 
-  <button class="action-strip__btn" title="Placeholder" disabled>
+  <div class="action-strip__divider"></div>
+
+  <button
+    class="action-strip__btn"
+    on:click={startReview}
+    disabled={!$analysisSummary || isExplorer}
+    title="Start"
+  >
+    <Play size={30} strokeWidth={2} />
+  </button>
+
+  <button
+    class="action-strip__btn"
+    on:click={toggleFlip}
+    title="Flip board (F)"
+  >
+    <ArrowUpDown size={28} strokeWidth={2} />
+  </button>
+
+  <div class="action-strip__divider"></div>
+
+  <button class="action-strip__btn" title="Settings" disabled>
     <Settings size={30} strokeWidth={2} />
   </button>
 </div>

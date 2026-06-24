@@ -7,7 +7,6 @@
   import { isFlipped } from '$lib/stores/boardStore';
   import ChevronLeft from 'lucide-svelte/icons/chevron-left';
   import ChevronRight from 'lucide-svelte/icons/chevron-right';
-  import ArrowUpDown from 'lucide-svelte/icons/arrow-up-down';
 
   $: canGoBack = $explorerIndex > 0;
   $: canGoForward = $explorerIndex < $currentLine.length - 1;
@@ -34,13 +33,6 @@
 <svelte:window on:keydown={handleKeydown} />
 
 <div class="controls">
-  <button
-    class="controls__btn controls__btn--icon"
-    on:click={toggleFlip}
-    title="Flip board (F)"
-  >
-    <ArrowUpDown size={22} strokeWidth={3} />
-  </button>
   <button
     class="controls__btn controls__btn--icon"
     on:click={goBack}

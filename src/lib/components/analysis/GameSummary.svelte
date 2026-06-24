@@ -1,14 +1,8 @@
 <script lang="ts">
-  import { activePly } from '$lib/stores/boardStore';
-  import { analysisSummary, sidebarView } from '$lib/stores/reviewStore';
+  import { analysisSummary } from '$lib/stores/reviewStore';
   import { tallyLabels, formatAccuracy, activeTallyRows } from '$lib/utils/ui';
   import Badge from '$lib/components/ui/Badge.svelte';
   import EvalGraph from './EvalGraph.svelte';
-
-  function startReview() {
-    activePly.set(0);
-    sidebarView.set('game');
-  }
 </script>
 
 <div class="summary">
@@ -48,6 +42,7 @@
 
     <div class="summary__section">
       <h3 class="summary__section-title">Move Tally</h3>
+
       <div class="tally__header">
         <span class="tally__header-spacer"></span>
         <div class="tally__header-players">
@@ -73,18 +68,16 @@
             </div>
             <div class="tally__counts">
               <span class="tally__count tally__count--white"
-                >{wCount > 0 ? wCount : '—'}</span
+                >{wCount > 0 ? wCount : ' '}</span
               >
               <span class="tally__count tally__count--black"
-                >{bCount > 0 ? bCount : '—'}</span
+                >{bCount > 0 ? bCount : ' '}</span
               >
             </div>
           </div>
         {/each}
       </div>
     </div>
-
-    <button class="review-btn" on:click={startReview}> Start Review </button>
   {/if}
 </div>
 
@@ -99,6 +92,7 @@
     scrollbar-width: thin;
     scrollbar-color: #333 transparent;
   }
+
   .summary__empty {
     flex: 1;
     display: flex;
@@ -107,11 +101,13 @@
     color: #555;
     font-weight: 500;
   }
+
   .summary__section {
     display: flex;
     flex-direction: column;
     gap: 0.6rem;
   }
+
   .summary__section-title {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 0.9rem;
@@ -123,6 +119,7 @@
     padding-bottom: 0.6rem;
     border-bottom: 1px solid #2a2a2e;
   }
+
   .summary__accuracy-row {
     display: flex;
     align-items: center;
@@ -130,54 +127,65 @@
     padding: 0.2rem 0;
     border-bottom: 1px solid #1e1e21;
   }
+
   .summary__accuracy-row:last-child {
     border-bottom: none;
   }
+
   .summary__player {
     display: flex;
     align-items: center;
     gap: 0.4rem;
   }
+
   .summary__player-dot {
     width: 9px;
     height: 9px;
     border-radius: 50%;
     flex-shrink: 0;
   }
+
   .summary__player-dot--white {
     background: #e8e6e0;
     border: 1px solid #555;
   }
+
   .summary__player-dot--black {
     background: #3a3a3a;
     border: 1px solid #555;
   }
+
   .summary__player-name {
     font-size: 0.88rem;
     font-weight: 600;
     color: #bbb;
   }
+
   .summary__accuracy-score {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 1.6rem;
     letter-spacing: 1px;
     color: #ececec;
   }
+
   .tally__header {
     display: flex;
     align-items: center;
     padding-bottom: 0.4rem;
     margin-bottom: 0.1rem;
   }
+
   .tally__header-spacer {
     flex: 1;
   }
+
   .tally__header-players {
     display: flex;
     gap: 0;
     width: 72px;
     flex-shrink: 0;
   }
+
   .tally__header-player {
     flex: 1;
     display: flex;
@@ -190,26 +198,32 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+
   .tally__header-player--white {
     justify-content: flex-end;
   }
+
   .tally__header-player--black {
     justify-content: flex-end;
   }
+
   .tally {
     display: flex;
     flex-direction: column;
     gap: 0;
   }
+
   .tally__row {
     display: flex;
     align-items: center;
     padding: 0.42rem 0;
     border-bottom: 1px solid #1e1e21;
   }
+
   .tally__row:last-child {
     border-bottom: none;
   }
+
   .tally__identity {
     flex: 1;
     display: flex;
@@ -217,17 +231,20 @@
     gap: 11px;
     min-width: 0;
   }
+
   .tally__label {
     font-size: 0.8rem;
     font-weight: 800;
     color: #999;
     white-space: nowrap;
   }
+
   .tally__counts {
     display: flex;
     width: 72px;
     flex-shrink: 0;
   }
+
   .tally__count {
     flex: 1;
     font-family: 'Bebas Neue', sans-serif;
@@ -235,33 +252,12 @@
     letter-spacing: 0.5px;
     text-align: right;
   }
+
   .tally__count--white {
     color: #ccc;
   }
+
   .tally__count--black {
     color: #888;
-  }
-
-  .review-btn {
-    background: #1b382b;
-    border: 1px solid #2b5743;
-    color: #8be1b4;
-    padding: 0.8rem 1.2rem;
-    border-radius: 8px;
-    cursor: pointer;
-    font-family: 'Outfit', sans-serif;
-    font-weight: 600;
-    font-size: 1rem;
-    width: 100%;
-    margin-top: 1rem;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .review-btn:hover {
-    background: #234737;
-    border-color: #3b7359;
   }
 </style>
