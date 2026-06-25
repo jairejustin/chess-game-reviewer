@@ -11,8 +11,8 @@
     fetchGames,
     loadMore
   } from '$lib/stores/fetchStore';
-
   import Loader2 from 'lucide-svelte/icons/loader-2';
+  import ClipboardPaste from 'lucide-svelte/icons/clipboard-paste';
 
   let currentTab: 'chesscom' | 'lichess' | 'paste' = $selectedPlatform;
   let manualPgnInput = '';
@@ -34,7 +34,7 @@
   }
 
   function formatResult(result: string): string {
-    if (result === '1/2-1/2') return '½–½';
+    if (result === '1/2-1/2') return '½-½';
     if (result === '1-0') return '1-0';
     if (result === '0-1') return '0-1';
     return result;
@@ -50,7 +50,6 @@
     const whiteMatch = manualPgnInput.match(/\[White "(.*?)"\]/);
     const blackMatch = manualPgnInput.match(/\[Black "(.*?)"\]/);
     const resultMatch = manualPgnInput.match(/\[Result "(.*?)"\]/);
-
     const res = resultMatch ? resultMatch[1] : '*';
 
     const manualGame: any = {
@@ -79,21 +78,38 @@
       class:platform-btn--active={currentTab === 'chesscom'}
       on:click={() => setTab('chesscom')}
     >
-      Chess.com
+      <img
+        src="/assets/chesscom_logo_pawn_negative.png"
+        alt="Chess.com"
+        width="18"
+        height="20"
+        class="platform-logo"
+      />
+      <span>Chess.com</span>
     </button>
+
     <button
       class="platform-btn"
       class:platform-btn--active={currentTab === 'lichess'}
       on:click={() => setTab('lichess')}
     >
-      Lichess
+      <img
+        src="/assets/lichess_logo_white_transparent.png"
+        alt="Lichess"
+        width="20"
+        height="20"
+        class="platform-logo"
+      />
+      <span>Lichess</span>
     </button>
+
     <button
       class="platform-btn"
       class:platform-btn--active={currentTab === 'paste'}
       on:click={() => setTab('paste')}
     >
-      Paste PGN
+      <ClipboardPaste size={20} strokeWidth={1.5} class="platform-logo" />
+      <span>PGN</span>
     </button>
   </div>
 
@@ -158,15 +174,13 @@
       <div class="game-list">
         {#each $fetchedGames as game}
           {@const isSelected = $selectedGame?.id === game.id}
-
           {@const canonicalUser = $fetchedProfile?.username || $usernameInput}
           {@const userIsWhite =
             game.white.username.toLowerCase() === canonicalUser.toLowerCase()}
-
           {@const opponent = userIsWhite ? game.black : game.white}
           {@const userSide = userIsWhite ? game.white : game.black}
-
           {@const res = userSide.result}
+
           {@const isWin =
             res === 'win' ||
             (userIsWhite && res === '1-0') ||
@@ -196,7 +210,6 @@
                 {/if}
               </span>
             </div>
-
             <div class="game-row__right">
               <span
                 class="game-row__result"
@@ -262,8 +275,12 @@
     padding: 3px;
     gap: 3px;
   }
+
   .platform-btn {
     flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background: transparent;
     border: none;
     border-radius: 6px;
@@ -271,22 +288,37 @@
     font-family: 'Outfit', sans-serif;
     font-weight: 600;
     font-size: 0.85rem;
-    padding: 0.45rem;
+    padding: 0.5rem 0.45rem;
     cursor: pointer;
     transition: all 0.15s ease;
   }
+
   .platform-btn--active {
     background: #232326;
     color: #ececec;
   }
+
   .platform-btn:hover:not(.platform-btn--active) {
     color: #999;
+  }
+
+  .platform-logo,
+  :global(.platform-btn svg) {
+    opacity: 0.8;
+    transition: opacity 0.15s ease;
+    flex-shrink: 0;
+  }
+
+  .platform-btn--active .platform-logo,
+  :global(.platform-btn--active svg) {
+    opacity: 1;
   }
 
   .fetch-input-row {
     display: flex;
     gap: 0.5rem;
   }
+
   .fetch-input {
     flex: 1;
     background: #111;
@@ -299,9 +331,11 @@
     outline: none;
     transition: border-color 0.2s;
   }
+
   .fetch-input:focus {
     border-color: #555;
   }
+
   .fetch-btn {
     background: #232326;
     border: 1px solid #333;
@@ -319,10 +353,12 @@
     gap: 0.4rem;
     white-space: nowrap;
   }
+
   .fetch-btn:hover:not(:disabled) {
     background: #2e2e32;
     border-color: #444;
   }
+
   .fetch-btn:disabled {
     opacity: 0.4;
     cursor: not-allowed;
@@ -347,6 +383,7 @@
     border: 1px solid #2a2a2e;
     border-radius: 8px;
   }
+
   .profile-strip__avatar {
     width: 2.5rem;
     height: 2.5rem;
@@ -355,12 +392,14 @@
     background: #232326;
     flex-shrink: 0;
   }
+
   .profile-strip__avatar img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
   }
+
   .profile-strip__avatar-fallback {
     width: 100%;
     height: 100%;
@@ -371,22 +410,26 @@
     font-size: 1.1rem;
     color: #888;
   }
+
   .profile-strip__info {
     display: flex;
     flex-direction: column;
     gap: 3px;
     min-width: 0;
   }
+
   .profile-strip__name {
     font-weight: 700;
     font-size: 0.95rem;
     color: #ececec;
   }
+
   .profile-strip__meta {
     display: flex;
     gap: 0.4rem;
     flex-wrap: wrap;
   }
+
   .profile-strip__tag {
     font-size: 0.75rem;
     color: #888;
@@ -401,6 +444,7 @@
     flex-direction: column;
     gap: 3px;
   }
+
   .game-row {
     appearance: none;
     background: transparent;
@@ -417,18 +461,22 @@
     cursor: pointer;
     transition: all 0.15s ease;
   }
+
   .game-row:hover {
     background: #1c1c1f;
   }
+
   .game-row--selected {
     background: #1c2535;
     border-color: #2a3f5a;
   }
+
   .game-row__left {
     display: flex;
     flex-direction: column;
     gap: 2px;
   }
+
   .game-row__time-class {
     font-size: 0.75rem;
     color: #666;
@@ -436,31 +484,38 @@
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
+
   .game-row__opponent {
     font-size: 0.9rem;
     font-weight: 600;
     color: #ccc;
   }
+
   .game-row__rating {
     font-weight: 400;
     color: #777;
     font-size: 0.85rem;
   }
+
   .game-row__right {
     flex-shrink: 0;
   }
+
   .game-row__result {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 1.1rem;
     letter-spacing: 0.5px;
     color: #888;
   }
+
   .game-row__result--win {
     color: #8be1b4;
   }
+
   .game-row__result--loss {
     color: #e07070;
   }
+
   .game-row__result--draw {
     color: #aaa;
   }
@@ -484,14 +539,17 @@
     transition: all 0.15s ease;
     margin-top: 0.25rem;
   }
+
   .load-more-btn:hover:not(:disabled) {
     background: #1c1c1f;
     color: #aaa;
   }
+
   .load-more-btn:disabled {
     opacity: 0.4;
     cursor: not-allowed;
   }
+
   .player-title {
     background: #b33430;
     color: #fff;
