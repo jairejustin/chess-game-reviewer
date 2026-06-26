@@ -149,7 +149,10 @@ pub fn run_analysis_pipeline(
     let mut uci_moves_history = Vec::new();
     let mut board = Chess::default();
 
-    // Helper: converts a UCI string to SAN in the context of a given position
+    // Converts a UCI string to SAN in the context of a given position.
+    // The returned SAN is stripped of check/checkmate suffixes ('+' and '#') so
+    // that comparisons against PGN-sourced SAN strings are suffix-agnostic.
+    // The original suffixed SAN is preserved separately for display purposes.
     let get_san = |uci_str: &str,
                    pos_opt: &Option<Chess>|
      -> String {
@@ -161,6 +164,8 @@ pub fn run_analysis_pipeline(
                     return San::from_move(
                         pos, m,
                     )
+                    .to_string()
+                    .trim_end_matches(['+', '#'])
                     .to_string();
                 }
             }
@@ -294,6 +299,9 @@ pub fn run_analysis_pipeline(
             &prev_pos,
         );
 
+        let san_cmp =
+            san.trim_end_matches(['+', '#']);
+
         // Delta check for horizon effect
         let class_prev_eval = white_to_moving_pov(
             prev_eval,
@@ -307,7 +315,8 @@ pub fn run_analysis_pipeline(
         let eval_drop =
             class_prev_eval - class_played_eval;
 
-        if san == best_move_san && eval_drop > 60
+        if san_cmp == best_move_san
+            && eval_drop > 60
         {
             let deep_cmd = format!(
                 "go depth 24 movetime {}",
@@ -362,7 +371,8 @@ pub fn run_analysis_pipeline(
                 })
                 .collect();
 
-            // Re-calculate the expected move in case the deep search changed its mind
+            // Re-calculate the expected move in case the deep search changed its mind.
+            // `get_san` strips suffixes so best_move_san remains suffix-free.
             best_move_san = get_san(
                 &prev_best_move_uci,
                 &prev_pos,
@@ -401,11 +411,15 @@ pub fn run_analysis_pipeline(
                 )
             });
 
+        // suffix-stripped SAN for comparison
+        let prev_san_cmp =
+            prev_san.trim_end_matches(['+', '#']);
+
         let (classification, current_win_loss) =
             evaluate_move_context(
-                &san,
+                san_cmp,
                 &fen,
-                &prev_san,
+                prev_san_cmp,
                 &prev_fen,
                 &best_move_san,
                 prev_eval,
@@ -435,7 +449,6 @@ pub fn run_analysis_pipeline(
                 .tally(&classification);
         }
 
-        // Construct AnalyzedMove payload
         let analyzed_move = AnalyzedMove {
             ply: ply_count,
             san: san.clone(),
