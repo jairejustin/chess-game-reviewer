@@ -8,8 +8,9 @@ use crate::models::game::{
     AnalyzedMove, MoveCounts,
 };
 use crate::uci::evaluation::{
-    engine_to_white_pov, extract_cp,
-    extract_mate, white_to_moving_pov,
+    bare_san, engine_to_white_pov, extract_cp,
+    extract_mate_white_pov, normalize_multi_pv,
+    uci_to_san, white_to_moving_pov,
 };
 use crate::uci::uci_engine::{
     Evaluation, UciEngine,
@@ -42,11 +43,11 @@ pub fn run_analysis_pipeline(
     // Changes made via configure_engine during analysis take effect on the next run.
     let config = config.lock().unwrap().clone();
 
-    // Deep re-analysis budget: give it ~2.5× the normal per-move time,
-    // clamped to a minimum of 3 seconds so fast configs still investigate properly.
-    let deep_time_ms =
-        (time_ms as f32 * 2.5) as u32;
-    let deep_time_ms = deep_time_ms.max(3000);
+    // Deep re-analysis budget: ~2.5× the normal per-move time,
+    // clamped to a minimum of 3 s so fast configs still investigate properly.
+    let deep_time_ms = ((time_ms as f32 * 2.5)
+        as u32)
+        .max(3_000);
 
     // Visitor impl used to construct the game metadata and track positions
     let mut visitor = PgnVisitor::new();
@@ -69,58 +70,46 @@ pub fn run_analysis_pipeline(
     let mut engine =
         UciEngine::new(&engine_path, &config);
 
-    // Starting position
+    // Seeds `prev_eval` / `prev_best_move_uci`.
     let initial_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-    let initial_pos_cmd = "position startpos";
 
-    // Analyze starting position using hybrid limit
     let (
         initial_eval,
         initial_best_move,
         _,
         initial_multi_pv_evals,
     ) = engine.analyze_position(
-        initial_pos_cmd,
+        "position startpos",
         &format!(
             "go depth 22 movetime {}",
             time_ms
         ),
     );
 
-    // Standardize the initial setup strictly to Absolute White POV.
+    // All running state is kept in Absolute White POV.
     let mut prev_eval = match initial_eval {
         Evaluation::Cp(cp) => {
             engine_to_white_pov(cp, true)
         }
         Evaluation::Mate(m) => {
             if m > 0 {
-                10000
+                10_000
             } else {
-                -10000
+                -10_000
             }
         }
     };
-
-    // The mate-in-N from the best move analysis of the *previous* position,
-    // kept in Absolute White POV. This is what feeds `class_best_mate` each
-    // ply — it is distinct from `prev_eval_obj` (which was the played eval).
-    // At the start the starting position has no forced mate.
     let mut prev_best_mate: Option<i32> = None;
-
-    let mut prev_multi_pv_evals: Vec<i32> =
-        initial_multi_pv_evals
-            .into_iter()
-            .map(|v| engine_to_white_pov(v, true))
-            .collect();
+    let mut prev_multi_pv_evals =
+        normalize_multi_pv(
+            initial_multi_pv_evals,
+            true,
+        );
 
     let mut prev_fen = initial_fen.to_string();
     let mut prev_san = String::new();
-
-    // total half-moves
-    let mut ply_count = 1;
-
     // The drop in win probability caused by the previous move
-    let mut prev_win_loss = 0.0;
+    let mut prev_win_loss = 0.0_f64;
 
     // The best engine move that the player should've played
     let mut prev_best_move_uci =
@@ -128,13 +117,13 @@ pub fn run_analysis_pipeline(
 
     // The cumulative mathematical disadvantage accumulated by each player.
     // Is used to calculate their final accuracy CAPS scores.
-    let mut white_win_loss = 0.0;
-    let mut black_win_loss = 0.0;
+    let mut white_win_loss = 0.0_f64;
+    let mut black_win_loss = 0.0_f64;
 
     // Total moves per side
     // Is used as the denominator for accuracy calculations.
-    let mut white_moves = 0;
-    let mut black_moves = 0;
+    let mut white_moves = 0u32;
+    let mut black_moves = 0u32;
 
     // Aggregated tally of moves made by each side for each classification
     let mut move_counts_white =
@@ -146,32 +135,10 @@ pub fn run_analysis_pipeline(
     let total_plies = positions.len() as u32;
     let mut analyzed_moves_collection =
         Vec::with_capacity(positions.len());
-    let mut uci_moves_history = Vec::new();
+    let mut uci_moves_history: Vec<String> =
+        Vec::new();
     let mut board = Chess::default();
-
-    // Converts a UCI string to SAN in the context of a given position.
-    // The returned SAN is stripped of check/checkmate suffixes ('+' and '#') so
-    // that comparisons against PGN-sourced SAN strings are suffix-agnostic.
-    // The original suffixed SAN is preserved separately for display purposes.
-    let get_san = |uci_str: &str,
-                   pos_opt: &Option<Chess>|
-     -> String {
-        if let Some(pos) = pos_opt {
-            if let Ok(uci) = UciMove::from_ascii(
-                uci_str.as_bytes(),
-            ) {
-                if let Ok(m) = uci.to_move(pos) {
-                    return San::from_move(
-                        pos, m,
-                    )
-                    .to_string()
-                    .trim_end_matches(['+', '#'])
-                    .to_string();
-                }
-            }
-        }
-        uci_str.to_string()
-    };
+    let mut ply_count = 1u32;
 
     for (san, fen, _uci) in positions {
         if cancel_flag.load(Ordering::Relaxed) {
@@ -184,6 +151,7 @@ pub fn run_analysis_pipeline(
         let is_white_to_move_after_play =
             !is_white_moving;
 
+        // Builds position commands
         let prev_pos_cmd =
             if uci_moves_history.is_empty() {
                 "position startpos".to_string()
@@ -194,7 +162,7 @@ pub fn run_analysis_pipeline(
                 )
             };
 
-        // Parse previous board state for early checks
+        // Resolves the previous board state for book / forced-move checks
         let prev_pos =
             Fen::from_ascii(prev_fen.as_bytes())
                 .ok()
@@ -205,7 +173,6 @@ pub fn run_analysis_pipeline(
                     .ok()
                 });
 
-        // Fast checks to evaluate book and forced moves before hitting the engine
         let is_forced_move = prev_pos
             .as_ref()
             .map(|pos| {
@@ -222,7 +189,7 @@ pub fn run_analysis_pipeline(
             })
             .unwrap_or(false);
 
-        // Dynamic Engine Limits
+        // Engine search limits
         let go_cmd =
             if is_book_flag || is_forced_move {
                 "go depth 12".to_string()
@@ -233,22 +200,22 @@ pub fn run_analysis_pipeline(
                 )
             };
 
-        // Plays move on board and builds history command
+        // Advance the board and record the played UCI move
         let parsed_san =
             San::from_ascii(san.as_bytes()).ok();
         let m = parsed_san
             .and_then(|s| s.to_move(&board).ok());
 
-        let played_uci =
-            if let Some(ref valid_move) = m {
+        let played_uci = m
+            .as_ref()
+            .map(|mv| {
                 UciMove::from_move(
-                    valid_move.clone(),
+                    mv.clone(),
                     CastlingMode::Standard,
                 )
                 .to_string()
-            } else {
-                String::new()
-            };
+            })
+            .unwrap_or_default();
 
         if let Some(valid_move) = m {
             board = board
@@ -264,7 +231,7 @@ pub fn run_analysis_pipeline(
             uci_moves_history.join(" ")
         );
 
-        // Evaluate the position after the played move
+        // Evaluate position after the played move
         let (
             mut played_eval,
             mut opponent_best_move,
@@ -275,47 +242,35 @@ pub fn run_analysis_pipeline(
             &go_cmd,
         );
 
-        // Normalize evaluations to Absolute White POV
-        let mut played_cp =
-            extract_cp(&played_eval);
         let mut normalized_cp =
             engine_to_white_pov(
-                played_cp,
+                extract_cp(&played_eval),
                 is_white_to_move_after_play,
             );
 
-        multi_pv_evals = multi_pv_evals
-            .into_iter()
-            .map(|v| {
-                engine_to_white_pov(
-                    v,
-                    is_white_to_move_after_play,
-                )
-            })
-            .collect();
-
-        let mut best_move_san = get_san(
-            &prev_best_move_uci,
-            &prev_pos,
+        multi_pv_evals = normalize_multi_pv(
+            multi_pv_evals,
+            is_white_to_move_after_play,
         );
 
-        let san_cmp =
-            san.trim_end_matches(['+', '#']);
+        // Resolves best-move SAN from previous position
+        let mut best_move_san =
+            bare_san(&uci_to_san(
+                &prev_best_move_uci,
+                &prev_pos,
+            ))
+            .to_string();
 
-        // Delta check for horizon effect
-        let class_prev_eval = white_to_moving_pov(
+        // Horizon-effect guard
+        let eval_drop = white_to_moving_pov(
             prev_eval,
             is_white_moving,
+        ) - white_to_moving_pov(
+            normalized_cp,
+            is_white_moving,
         );
-        let class_played_eval =
-            white_to_moving_pov(
-                normalized_cp,
-                is_white_moving,
-            );
-        let eval_drop =
-            class_prev_eval - class_played_eval;
 
-        if san_cmp == best_move_san
+        if bare_san(&san) == best_move_san
             && eval_drop > 60
         {
             let deep_cmd = format!(
@@ -323,7 +278,6 @@ pub fn run_analysis_pipeline(
                 deep_time_ms
             );
 
-            // Re-evaluate the previous position deeply
             let (
                 deep_prev_eval,
                 deep_prev_best,
@@ -334,7 +288,6 @@ pub fn run_analysis_pipeline(
                 &deep_cmd,
             );
 
-            // Re-evaluate the current position deeply
             let (
                 deep_played_eval,
                 deep_opp_best,
@@ -345,81 +298,57 @@ pub fn run_analysis_pipeline(
                 &deep_cmd,
             );
 
-            // Re-normalize previous state to Absolute White POV.
-            // Also update prev_best_mate from the deeper re-analysis so the
-            // classifier sees the accurate mate distance.
+            // Updates previous-position state from the deeper search.
             prev_best_move_uci = deep_prev_best;
             prev_best_mate =
-                extract_mate(&deep_prev_eval)
-                    .map(|m| {
-                        engine_to_white_pov(
-                            m,
-                            is_white_moving,
-                        )
-                    });
+                extract_mate_white_pov(
+                    &deep_prev_eval,
+                    is_white_moving,
+                );
             prev_eval = engine_to_white_pov(
                 extract_cp(&deep_prev_eval),
                 is_white_moving,
             );
-            prev_multi_pv_evals = deep_prev_multi
-                .into_iter()
-                .map(|v| {
-                    engine_to_white_pov(
-                        v,
-                        is_white_moving,
-                    )
-                })
-                .collect();
+            prev_multi_pv_evals =
+                normalize_multi_pv(
+                    deep_prev_multi,
+                    is_white_moving,
+                );
 
-            // Re-calculate the expected move in case the deep search changed its mind.
-            // `get_san` strips suffixes so best_move_san remains suffix-free.
-            best_move_san = get_san(
-                &prev_best_move_uci,
-                &prev_pos,
-            );
+            best_move_san =
+                bare_san(&uci_to_san(
+                    &prev_best_move_uci,
+                    &prev_pos,
+                ))
+                .to_string();
 
-            // Re-normalize current state to Absolute White POV
+            // Updates current-position state from the deeper search.
             played_eval = deep_played_eval;
             opponent_best_move = deep_opp_best;
             pv = deep_pv;
-            multi_pv_evals = deep_multi
-                .into_iter()
-                .map(|v| {
-                    engine_to_white_pov(
-                        v,
-                        is_white_to_move_after_play,
-                    )
-                })
-                .collect();
+            multi_pv_evals = normalize_multi_pv(
+                deep_multi,
+                is_white_to_move_after_play,
+            );
 
-            played_cp = extract_cp(&played_eval);
             normalized_cp = engine_to_white_pov(
-                played_cp,
+                extract_cp(&played_eval),
                 is_white_to_move_after_play,
             );
         }
 
-        // Extract the played move's mate score in Absolute White POV.
-        // `prev_best_mate` already holds the best-move mate from the previous
-        // position's analysis (set at the end of the previous iteration, or
-        // updated above during the horizon re-analysis).
+        // Classify the move
         let class_played_mate =
-            extract_mate(&played_eval).map(|m| {
-                engine_to_white_pov(
-                    m,
-                    is_white_to_move_after_play,
-                )
-            });
-
-        // suffix-stripped SAN for comparison
-        let prev_san_cmp =
-            prev_san.trim_end_matches(['+', '#']);
+            extract_mate_white_pov(
+                &played_eval,
+                is_white_to_move_after_play,
+            );
 
         let (classification, current_win_loss) =
             evaluate_move_context(
-                san_cmp,
+                bare_san(&san),
                 &fen,
-                prev_san_cmp,
+                bare_san(&prev_san),
                 &prev_fen,
                 &best_move_san,
                 prev_eval,
@@ -436,8 +365,7 @@ pub fn run_analysis_pipeline(
         let positive_loss =
             current_win_loss.max(0.0);
 
-        // Increment move counters and tally classifications per side
-        if ply_count % 2 != 0 {
+        if is_white_moving {
             white_win_loss += positive_loss;
             white_moves += 1;
             move_counts_white
@@ -449,24 +377,23 @@ pub fn run_analysis_pipeline(
                 .tally(&classification);
         }
 
-        let analyzed_move = AnalyzedMove {
-            ply: ply_count,
-            san: san.clone(),
-            fen: fen.clone(),
-            uci: played_uci,
-            played_eval: normalized_cp,
-            prev_best_eval: prev_eval,
-            best_move_san: best_move_san.clone(),
-            classification,
-            principal_variation: pv,
-            mate_in: class_played_mate,
-            best_mate_in: prev_best_mate,
-        };
+        analyzed_moves_collection.push(
+            AnalyzedMove {
+                ply: ply_count,
+                san: san.clone(),
+                fen: fen.clone(),
+                uci: played_uci,
+                played_eval: normalized_cp,
+                prev_best_eval: prev_eval,
+                best_move_san: best_move_san
+                    .clone(),
+                classification,
+                principal_variation: pv,
+                mate_in: class_played_mate,
+                best_mate_in: prev_best_mate,
+            },
+        );
 
-        analyzed_moves_collection
-            .push(analyzed_move);
-
-        // Emit progress
         app.emit(
             "analysis-progress",
             AnalysisProgress {
@@ -476,21 +403,14 @@ pub fn run_analysis_pipeline(
         )
         .map_err(|e| e.to_string())?;
 
-        // `prev_best_mate` must come from the best-move analysis of the current
-        // position (i.e. what the opponent will face). The engine returns scores
-        // relative to the side to move, so after the played move it is the
-        // opponent's turn; we negate to stay in Absolute White POV before storing.
-        prev_best_mate =
-            extract_mate(&played_eval).map(|m| {
-                engine_to_white_pov(
-                    m,
-                    is_white_to_move_after_play,
-                )
-            });
-
+        // Roll state forward for next ply
+        prev_best_mate = extract_mate_white_pov(
+            &played_eval,
+            is_white_to_move_after_play,
+        );
         prev_eval = normalized_cp;
         prev_fen = fen;
-        prev_san = san.clone();
+        prev_san = san; // preserve display form
         prev_win_loss = current_win_loss;
         prev_best_move_uci = opponent_best_move;
         prev_multi_pv_evals = multi_pv_evals;
@@ -499,24 +419,24 @@ pub fn run_analysis_pipeline(
 
     engine.quit();
 
-    // Construct and emit the final analysis summary
-    let summary = AnalysisSummary {
-        white_accuracy: calculate_accuracy(
-            white_win_loss,
-            white_moves,
-        ),
-        black_accuracy: calculate_accuracy(
-            black_win_loss,
-            black_moves,
-        ),
-        move_counts_black,
-        move_counts_white,
-        metadata,
-        moves: analyzed_moves_collection,
-    };
-
-    app.emit("analysis-complete", &summary)
-        .map_err(|e| e.to_string())?;
+    app.emit(
+        "analysis-complete",
+        &AnalysisSummary {
+            white_accuracy: calculate_accuracy(
+                white_win_loss,
+                white_moves,
+            ),
+            black_accuracy: calculate_accuracy(
+                black_win_loss,
+                black_moves,
+            ),
+            move_counts_black,
+            move_counts_white,
+            metadata,
+            moves: analyzed_moves_collection,
+        },
+    )
+    .map_err(|e| e.to_string())?;
 
     Ok(())
 }

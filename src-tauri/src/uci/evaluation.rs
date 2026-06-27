@@ -1,4 +1,7 @@
 use crate::uci::uci_engine::Evaluation;
+use shakmaty::san::San;
+use shakmaty::uci::UciMove;
+use shakmaty::Chess;
 
 /// Converts a raw engine score (relative to the side whose turn it is to move)
 /// into an absolute evaluation from White's perspective (+ is winning for White).
@@ -33,9 +36,9 @@ pub fn extract_cp(eval: &Evaluation) -> i32 {
         Evaluation::Cp(cp) => *cp,
         Evaluation::Mate(m) => {
             if *m > 0 {
-                10000
+                10_000
             } else {
-                -10000
+                -10_000
             }
         }
     }
@@ -51,8 +54,64 @@ pub fn extract_mate(
     }
 }
 
+/// Extracts a mate score and converts it to Absolute White POV in one step.
+pub fn extract_mate_white_pov(
+    eval: &Evaluation,
+    is_white_to_move: bool,
+) -> Option<i32> {
+    extract_mate(eval).map(|m| {
+        engine_to_white_pov(m, is_white_to_move)
+    })
+}
+
+/// Normalises a raw multi-PV eval vector to Absolute White POV in one call.
+pub fn normalize_multi_pv(
+    evals: Vec<i32>,
+    is_white_to_move: bool,
+) -> Vec<i32> {
+    evals
+        .into_iter()
+        .map(|v| {
+            engine_to_white_pov(
+                v,
+                is_white_to_move,
+            )
+        })
+        .collect()
+}
+
+/// Strips check (`+`) and mate (`#`) suffixes for bare move comparison.
+///
+/// Engines omit these suffixes from UCI output, so `get_san` / `San::from_move`
+/// may produce `"Bb4+"` while a PGN source produces `"Bb4"` (or vice-versa).
+/// Always compare through this function to avoid mismatches.
+pub fn bare_san(san: &str) -> &str {
+    san.trim_end_matches(['+', '#'])
+}
+
+/// Converts a UCI move string to SAN in the context of a given board position.
+///
+/// Returns the UCI string unchanged if the position is absent or the move
+/// cannot be parsed / applied (illegal moves).
+pub fn uci_to_san(
+    uci_str: &str,
+    pos: &Option<Chess>,
+) -> String {
+    if let Some(pos) = pos {
+        if let Ok(uci) = UciMove::from_ascii(
+            uci_str.as_bytes(),
+        ) {
+            if let Ok(m) = uci.to_move(pos) {
+                return San::from_move(pos, m)
+                    .to_string();
+            }
+        }
+    }
+    uci_str.to_string()
+}
+
 /// Converts a backend `Evaluation` into a frontend display string.
-/// Negative mate scores are rendered as "-M3" so the UI can distinguish losing mates.
+/// Negative mate scores render as `"-M3"` so the UI can distinguish losing mates.
 pub fn format_eval(eval: Evaluation) -> String {
     match eval {
         Evaluation::Cp(cp) => {
@@ -63,7 +122,6 @@ pub fn format_eval(eval: Evaluation) -> String {
                 format!("{:.2}", score)
             }
         }
-        // Positive mate = we are delivering mate; negative = opponent is.
         Evaluation::Mate(m) => {
             if m >= 0 {
                 format!("M{}", m)
@@ -170,11 +228,11 @@ mod tests {
     {
         assert_eq!(
             extract_cp(&Evaluation::Mate(3)),
-            10000
+            10_000
         );
         assert_eq!(
             extract_cp(&Evaluation::Mate(1)),
-            10000
+            10_000
         );
     }
 
@@ -183,11 +241,11 @@ mod tests {
     ) {
         assert_eq!(
             extract_cp(&Evaluation::Mate(-2)),
-            -10000
+            -10_000
         );
         assert_eq!(
             extract_cp(&Evaluation::Mate(-5)),
-            -10000
+            -10_000
         );
     }
 
@@ -216,6 +274,82 @@ mod tests {
     }
 
     #[test]
+    fn extract_mate_white_pov_returns_none_for_cp(
+    ) {
+        assert_eq!(
+            extract_mate_white_pov(
+                &Evaluation::Cp(300),
+                true
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn extract_mate_white_pov_negates_when_black_to_move(
+    ) {
+        assert_eq!(
+            extract_mate_white_pov(
+                &Evaluation::Mate(2),
+                false
+            ),
+            Some(-2)
+        );
+    }
+
+    #[test]
+    fn extract_mate_white_pov_preserves_when_white_to_move(
+    ) {
+        assert_eq!(
+            extract_mate_white_pov(
+                &Evaluation::Mate(3),
+                true
+            ),
+            Some(3)
+        );
+    }
+
+    #[test]
+    fn normalize_multi_pv_negates_all_when_black_to_move(
+    ) {
+        assert_eq!(
+            normalize_multi_pv(
+                vec![100, -50],
+                false
+            ),
+            vec![-100, 50]
+        );
+    }
+
+    #[test]
+    fn normalize_multi_pv_preserves_all_when_white_to_move(
+    ) {
+        assert_eq!(
+            normalize_multi_pv(
+                vec![100, -50],
+                true
+            ),
+            vec![100, -50]
+        );
+    }
+
+    #[test]
+    fn bare_san_strips_check_suffix() {
+        assert_eq!(bare_san("Bb4+"), "Bb4");
+    }
+
+    #[test]
+    fn bare_san_strips_mate_suffix() {
+        assert_eq!(bare_san("Qxf7#"), "Qxf7");
+    }
+
+    #[test]
+    fn bare_san_leaves_plain_move_unchanged() {
+        assert_eq!(bare_san("e4"), "e4");
+        assert_eq!(bare_san("Nf3"), "Nf3");
+    }
+
+    #[test]
     fn format_eval_positive_cp_has_plus_prefix() {
         assert_eq!(
             format_eval(Evaluation::Cp(145)),
@@ -233,7 +367,6 @@ mod tests {
 
     #[test]
     fn format_eval_zero_cp_has_plus_prefix() {
-        // Zero is non-negative, so it gets the + prefix
         assert_eq!(
             format_eval(Evaluation::Cp(0)),
             "+0.00"
