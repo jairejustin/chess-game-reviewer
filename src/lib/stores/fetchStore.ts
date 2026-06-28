@@ -1,5 +1,5 @@
 import { writable, get } from 'svelte/store';
-import { invoke } from '@tauri-apps/api/core';
+import { ApiService } from '../services/apiService';
 import type {
   FetchResult,
   GameSummary,
@@ -13,6 +13,7 @@ export const selectedPlatform = writable<Platform>('chesscom');
 export const fetchedProfile = writable<FetchResult['profile'] | null>(null);
 export const fetchedGames = writable<GameSummary[]>([]);
 export const selectedGame = writable<GameSummary | null>(null);
+
 export const isFetching = writable<boolean>(false);
 export const fetchError = writable<string | null>(null);
 export const fetchCursor = writable<ChessComCursor | null>(null);
@@ -28,11 +29,11 @@ export async function fetchGames(
   fetchError.set(null);
 
   try {
-    const result = await invoke<FetchResult>('fetch_games', {
+    const result = await ApiService.fetchGames(
       username,
       platform,
-      cursor: cursor ?? null
-    });
+      cursor ?? null
+    );
 
     if (cursor) {
       fetchedGames.update((g) => [...g, ...result.games]);
@@ -53,5 +54,7 @@ export async function fetchGames(
 
 export function loadMore(username: string, platform: Platform) {
   const cursor = get(fetchCursor);
-  if (cursor) fetchGames(username, platform, cursor);
+  if (cursor) {
+    fetchGames(username, platform, cursor);
+  }
 }

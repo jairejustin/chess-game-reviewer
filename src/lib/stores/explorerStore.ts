@@ -1,7 +1,6 @@
 import { writable, derived, get } from 'svelte/store';
-import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { Chess } from 'chess.js';
+import { EngineService } from '../services/engineService';
 import type { MoveNode, PVLine } from '../types/game';
 
 const STABLE_DEPTH = 8;
@@ -65,7 +64,7 @@ engineWatcher.subscribe(({ fen, on }) => {
   mateAlreadyHandled = false;
 
   if (!on) {
-    invoke('stop_live_analysis').catch(console.error);
+    EngineService.stopLiveAnalysis().catch(console.error);
     engineStatus.set('paused');
     livePVLines.set([]);
     return;
@@ -97,14 +96,12 @@ engineWatcher.subscribe(({ fen, on }) => {
     pendingLines.clear();
     mateAlreadyHandled = false;
 
-    invoke('analyze_live_position', { fen: uciFen, multipv: 3 }).catch(
-      (err) => {
-        console.error('Engine invoke error:', err);
-        if (activeSearchFen === uciFen) {
-          engineStatus.set('paused');
-        }
+    EngineService.analyzeLivePosition(uciFen, 3).catch((err) => {
+      console.error('Engine invoke error:', err);
+      if (activeSearchFen === uciFen) {
+        engineStatus.set('paused');
       }
-    );
+    });
 
     engineHeartbeat = setTimeout(() => {
       if (activeSearchFen !== uciFen) return;
@@ -193,13 +190,13 @@ export function enterVariationFromMove(san: string, fen: string, uci: string) {
   explorerIndex.set(cursor + 1);
 }
 
-let unlistenEngine: UnlistenFn | null = null;
+let unlistenEngine: (() => void) | null = null;
 
 const pendingLines = new Map<number, PVLine>();
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
 export async function mountExplorer(gameMoves: MoveNode[], startIndex: number) {
-  await invoke('toggle_live_engine', { start: true }).catch(console.error);
+  await EngineService.toggleLiveEngine(true).catch(console.error);
 
   const initialMoves: MoveNode[] =
     gameMoves.length > 0
@@ -218,13 +215,10 @@ export async function mountExplorer(gameMoves: MoveNode[], startIndex: number) {
   currentLine.set([...initialMoves]);
   explorerIndex.set(startIndex);
 
-  unlistenEngine = await listen<any>('live-engine-info', (event) => {
-    const { fen: payloadFen, depth, multipv, evaluation, pv } = event.payload;
+  unlistenEngine = await EngineService.listenToLiveEngine((payload) => {
+    const { fen: payloadFen, depth, multipv, evaluation, pv } = payload;
 
     if (payloadFen !== activeSearchFen) return;
-    // Drop all further events once a mate has been confirmed and stop has been
-    // dispatched. The engine keeps emitting until Rust actually halts, so this
-    // guard is the only thing preventing a flood of redundant store writes.
     if (mateAlreadyHandled) return;
 
     clearTimeout(engineHeartbeat);
@@ -232,7 +226,6 @@ export async function mountExplorer(gameMoves: MoveNode[], startIndex: number) {
     const { cp, mateIn, formatted } = parseRawEngineEval(evaluation);
     const isMate = mateIn !== null;
 
-    // Handle mate immediately and synchronously
     if (isMate && multipv === 1) {
       mateAlreadyHandled = true;
 
@@ -244,7 +237,7 @@ export async function mountExplorer(gameMoves: MoveNode[], startIndex: number) {
 
       currentDepth.set(99);
       engineStatus.set('paused');
-      invoke('stop_live_analysis').catch(console.error);
+      EngineService.stopLiveAnalysis().catch(console.error);
 
       const line = uciLineToPVLine(
         payloadFen,

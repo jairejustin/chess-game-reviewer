@@ -1,7 +1,7 @@
 import { writable, derived } from 'svelte/store';
-import { listen } from '@tauri-apps/api/event';
+import { EngineService } from '../services/engineService';
 import { moves, activePly, resetBoard } from './boardStore';
-import type { AnalysisSummary, AnalysisProgress } from '../types/game';
+import type { AnalysisSummary } from '../types/game';
 
 export type SidebarView = 'import' | 'game' | 'summary';
 
@@ -28,33 +28,29 @@ export const resetAnalysis = () => {
 };
 
 export async function initAnalysisListeners() {
-  await listen('analysis-started', () => {
-    resetAnalysis();
-    isAnalyzing.set(true);
-  });
-
-  await listen<AnalysisProgress>('analysis-progress', (event) => {
-    const { currentPly, totalPlies } = event.payload;
-    if (totalPlies > 0) {
-      loadingProgress.set(currentPly / totalPlies);
+  await EngineService.listenToAnalysisEvents({
+    onStart: () => {
+      resetAnalysis();
+      isAnalyzing.set(true);
+    },
+    onProgress: (payload) => {
+      if (payload.totalPlies > 0) {
+        loadingProgress.set(payload.currentPly / payload.totalPlies);
+      }
+    },
+    onComplete: (payload) => {
+      isAnalyzing.set(false);
+      analysisSummary.set(payload);
+      moves.set(payload.moves.map((m) => ({ ...m, source: 'game' as const })));
+      if (payload.moves.length > 0) {
+        activePly.set(payload.moves.length - 1);
+      }
+      loadingProgress.set(1);
+      sidebarView.set('summary');
+    },
+    onError: (error) => {
+      console.error('[Engine error]', error);
+      isAnalyzing.set(false);
     }
-  });
-
-  await listen<AnalysisSummary>('analysis-complete', (event) => {
-    isAnalyzing.set(false);
-    analysisSummary.set(event.payload);
-    moves.set(
-      event.payload.moves.map((m) => ({ ...m, source: 'game' as const }))
-    );
-    if (event.payload.moves.length > 0) {
-      activePly.set(event.payload.moves.length - 1);
-    }
-    loadingProgress.set(1);
-    sidebarView.set('summary');
-  });
-
-  await listen<string>('analysis-error', (event) => {
-    console.error('[Engine error]', event.payload);
-    isAnalyzing.set(false);
   });
 }
