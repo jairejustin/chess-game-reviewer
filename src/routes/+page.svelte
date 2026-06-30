@@ -22,13 +22,13 @@
 
   // Components
   import ChessBoard from '$lib/components/board/ChessBoard.svelte';
-  import BoardControls from '$lib/components/board/BoardControls.svelte';
   import FetchGames from '$lib/components/import/FetchGames.svelte';
   import EngineFeedback from '$lib/components/analysis/EngineFeedback.svelte';
-  import MoveList from '$lib/components/analysis/MoveList.svelte';
+  import MoveList from '$lib/components/ui/MoveList.svelte';
   import GameSummary from '$lib/components/analysis/GameSummary.svelte';
   import AnalysisLoading from '$lib/components/ui/AnalysisLoading.svelte';
   import ActionStrip from '$lib/components/ui/ActionStrip.svelte';
+  import NavigationControls from '$lib/components/ui/NavigationControls.svelte';
 
   let opponentProfile: any = null;
 
@@ -190,9 +190,20 @@
         <AnalysisLoading progress={$loadingProgress} />
       {:else}
         <EngineFeedback />
-        <MoveList />
+        <MoveList
+          moves={$moves}
+          activeIndex={$activePly}
+          onSelect={(i) => activePly.set(i)}
+          showBadges={true}
+          emptyMessage="No moves analyzed yet."
+        />
         <div class="sidebar__controls">
-          <BoardControls />
+          <NavigationControls
+            canGoBack={$activePly > 0}
+            canGoForward={$activePly < $moves.length - 1}
+            onBack={() => activePly.update((p) => p - 1)}
+            onForward={() => activePly.update((p) => p + 1)}
+          />
           {#if !$analysisSummary && $selectedGame}
             <button
               class="analyze-preview-btn"

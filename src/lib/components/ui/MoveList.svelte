@@ -1,38 +1,31 @@
 <script lang="ts">
-  import {
-    currentLine,
-    explorerIndex,
-    setExplorerIndex
-  } from '$lib/stores/explorerStore';
+  import { autoScroll } from '$lib/actions/scroll';
   import Figurine from '$lib/components/ui/Figurine.svelte';
+  import Badge from '$lib/components/ui/Badge.svelte';
+  import { formatEval } from '$lib/utils/ui';
+  import type { MoveNode } from '$lib/types/game';
 
-  function autoScroll(node: HTMLElement, isActive: boolean) {
-    if (isActive) {
-      node.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-    return {
-      update(newIsActive: boolean) {
-        if (newIsActive) {
-          node.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-      }
-    };
-  }
+  export let moves: MoveNode[];
+  export let activeIndex: number;
+  export let onSelect: (index: number) => void;
+
+  export let showBadges: boolean = false;
+  export let emptyMessage: string = 'No moves yet.';
 </script>
 
 <div class="move-list">
-  {#if $currentLine.length <= 1}
+  {#if moves.length <= 1}
     <div class="move-list__empty">
-      <p>Make a move on the board</p>
+      <p>{emptyMessage}</p>
     </div>
   {:else}
-    {#each $currentLine as move, index}
+    {#each moves as move, index}
       {#if index > 0}
         <button
           class="move-list__row"
-          class:move-list__row--active={$explorerIndex === index}
-          on:click={() => setExplorerIndex(index)}
-          use:autoScroll={$explorerIndex === index}
+          class:move-list__row--active={activeIndex === index}
+          on:click={() => onSelect(index)}
+          use:autoScroll={activeIndex === index}
         >
           <div class="move-list__info">
             <span class="move-list__ply">
@@ -43,11 +36,22 @@
             </span>
           </div>
 
-          {#if move.source === 'variation'}
-            <div class="move-list__meta move-list__meta--variation">
-              <span class="variation-indicator">~</span>
-            </div>
-          {/if}
+          <div class="move-list__meta">
+            {#if showBadges && move.classification}
+              <span class="move-list__eval">
+                {formatEval(move.playedEval ?? 0, move.mateIn)}
+              </span>
+              <div title={move.classification}>
+                <Badge classification={move.classification} size={26} />
+              </div>
+            {/if}
+
+            {#if !showBadges && move.source === 'variation'}
+              <div class="move-list__meta--variation">
+                <span class="variation-indicator">~</span>
+              </div>
+            {/if}
+          </div>
         </button>
       {/if}
     {/each}
@@ -63,16 +67,12 @@
     scrollbar-width: thin;
     scrollbar-color: #333 transparent;
   }
-
   .move-list__empty {
     height: 100%;
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
     color: #555;
-    font-size: 0.9rem;
-    text-align: center;
   }
 
   .move-list__row {
@@ -92,11 +92,9 @@
     transition: all 0.15s ease;
     cursor: pointer;
   }
-
   .move-list__row:hover {
     background: #232326;
   }
-
   .move-list__row--active {
     background: #252a30;
     border-color: #34404a;
@@ -107,7 +105,6 @@
     gap: 0.8rem;
     align-items: center;
   }
-
   .move-list__ply {
     color: #777;
     font-weight: 500;
@@ -115,7 +112,6 @@
     width: 42px;
     flex-shrink: 0;
   }
-
   .move-list__san {
     font-weight: 400;
     font-size: 1rem;
@@ -126,11 +122,17 @@
     align-items: center;
     gap: 0.6rem;
   }
-
+  .move-list__eval {
+    font-family: 'Bebas Neue', sans-serif;
+    color: #888;
+    font-size: 1.15rem;
+    width: 52px;
+    text-align: right;
+    letter-spacing: 0.5px;
+  }
   .move-list__meta--variation {
     opacity: 0.3;
   }
-
   .variation-indicator {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 1rem;

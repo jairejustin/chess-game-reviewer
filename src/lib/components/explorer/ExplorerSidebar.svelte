@@ -4,12 +4,15 @@
     engineStatus,
     livePVLines,
     toggleEngine,
-    currentDepth
+    currentDepth,
+    explorerIndex,
+    currentLine,
+    setExplorerIndex
   } from '$lib/stores/explorerStore';
   import MultiPVStack from './MultiPVStack.svelte';
 
-  import LiveMoveList from './LiveMoveList.svelte';
-  import ExplorerControls from './ExplorerControls.svelte';
+  import MoveList from '../ui/MoveList.svelte';
+  import NavigationControls from '../ui/NavigationControls.svelte';
   import Cpu from 'lucide-svelte/icons/cpu';
 </script>
 
@@ -59,10 +62,21 @@
     depth={$currentDepth}
   />
 
-  <LiveMoveList />
+  <MoveList
+    moves={$currentLine}
+    activeIndex={$explorerIndex}
+    onSelect={(i) => setExplorerIndex(i)}
+    showBadges={false}
+    emptyMessage="Make a move on the board."
+  />
 
   <div class="sidebar__controls">
-    <ExplorerControls />
+    <NavigationControls
+      canGoBack={$explorerIndex > 0}
+      canGoForward={$explorerIndex < $currentLine.length - 1}
+      onBack={() => setExplorerIndex($explorerIndex - 1)}
+      onForward={() => setExplorerIndex($explorerIndex + 1)}
+    />
   </div>
 </aside>
 

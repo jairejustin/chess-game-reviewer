@@ -1,31 +1,20 @@
 <script lang="ts">
-  import {
-    currentLine,
-    explorerIndex,
-    setExplorerIndex
-  } from '$lib/stores/explorerStore';
   import { isFlipped } from '$lib/stores/boardStore';
   import ChevronLeft from 'lucide-svelte/icons/chevron-left';
   import ChevronRight from 'lucide-svelte/icons/chevron-right';
 
-  $: canGoBack = $explorerIndex > 0;
-  $: canGoForward = $explorerIndex < $currentLine.length - 1;
-
-  function goBack() {
-    if (canGoBack) setExplorerIndex($explorerIndex - 1);
-  }
-
-  function goForward() {
-    if (canGoForward) setExplorerIndex($explorerIndex + 1);
-  }
+  export let canGoBack: boolean;
+  export let canGoForward: boolean;
+  export let onBack: () => void;
+  export let onForward: () => void;
 
   function toggleFlip() {
     $isFlipped = !$isFlipped;
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'ArrowLeft') goBack();
-    if (e.key === 'ArrowRight') goForward();
+    if (e.key === 'ArrowLeft' && canGoBack) onBack();
+    if (e.key === 'ArrowRight' && canGoForward) onForward();
     if (e.key.toLowerCase() === 'f') toggleFlip();
   }
 </script>
@@ -35,7 +24,7 @@
 <div class="controls">
   <button
     class="controls__btn controls__btn--icon"
-    on:click={goBack}
+    on:click={onBack}
     disabled={!canGoBack}
     title="Previous move"
   >
@@ -43,7 +32,7 @@
   </button>
   <button
     class="controls__btn controls__btn--icon"
-    on:click={goForward}
+    on:click={onForward}
     disabled={!canGoForward}
     title="Next move"
   >
