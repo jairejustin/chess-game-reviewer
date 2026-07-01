@@ -3,7 +3,6 @@
   import { get } from 'svelte/store';
   import { Chess } from 'chess.js';
 
-  // Stores
   import { selectedGame } from '$lib/stores/fetchStore';
   import { moves, activePly } from '$lib/stores/boardStore';
   import {
@@ -19,11 +18,9 @@
     enterVariationFromMove
   } from '$lib/stores/explorerStore';
 
-  // Components
+  import AppLayout from '$lib/components/ui/AppLayout.svelte';
   import ChessBoard from '$lib/components/board/ChessBoard.svelte';
   import ExplorerSidebar from '$lib/components/explorer/ExplorerSidebar.svelte';
-  import ActionStrip from '$lib/components/ui/ActionStrip.svelte';
-  import type { EngineLine } from '$lib/types/game';
 
   $: whiteName = $selectedGame?.white.username ?? 'White';
   $: blackName = $selectedGame?.black.username ?? 'Black';
@@ -61,7 +58,6 @@
       const chess = new Chess(fen === 'start' ? undefined : fen);
       const result = chess.move({ from: orig, to: dest, promotion: 'q' });
       if (!result) return;
-
       enterVariationFromMove(
         result.san,
         chess.fen(),
@@ -70,7 +66,6 @@
     } catch {}
   }
 
-  // Lifecycle
   onMount(async () => {
     await mountExplorer(get(moves), get(activePly));
   });
@@ -80,8 +75,8 @@
   });
 </script>
 
-<main class="layout">
-  <section class="layout__board">
+<AppLayout>
+  <svelte:fragment slot="board">
     <ChessBoard
       {whiteName}
       {blackName}
@@ -97,33 +92,7 @@
       onMove={handleBoardMove}
       engineLines={boardEngineLines}
     />
-  </section>
+  </svelte:fragment>
 
-  <ActionStrip />
-  <ExplorerSidebar />
-</main>
-
-<style>
-  .layout {
-    display: flex;
-    height: 100vh;
-    width: 100vw;
-    max-width: 100%;
-    margin: 0;
-    padding: 1rem;
-    gap: 0;
-    box-sizing: border-box;
-    overflow: hidden;
-    align-items: flex-start;
-  }
-  .layout__board {
-    flex: 1;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100%;
-    min-height: 0;
-    padding: 4rem 1rem 4rem 4rem;
-    box-sizing: border-box;
-  }
-</style>
+  <ExplorerSidebar slot="sidebar" />
+</AppLayout>
