@@ -27,6 +27,10 @@ export const EngineService = {
     await invoke('analyze_game', { pgn });
   },
 
+  async cancelAnalysis(): Promise<void> {
+    await invoke('cancel_analysis');
+  },
+
   async listenToAnalysisEvents(callbacks: {
     onStart: () => void;
     onProgress: (payload: AnalysisProgress) => void;

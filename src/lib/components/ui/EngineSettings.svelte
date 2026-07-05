@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
   import Save from 'lucide-svelte/icons/save';
-  
+
   let threads = 4;
   let hashMb = 128;
   let multiPv = 3;
@@ -14,11 +14,12 @@
   onMount(async () => {
     try {
       const config: any = await invoke('get_engine_config');
-      
+
       if (config.threads !== null) threads = config.threads;
       if (config.hashMb !== null) hashMb = config.hashMb;
       if (config.multiPv !== null) multiPv = config.multiPv;
-      if (config.analysisTimeMs !== null) analysisTimeMs = config.analysisTimeMs;
+      if (config.analysisTimeMs !== null)
+        analysisTimeMs = config.analysisTimeMs;
     } catch (e) {
       console.error('Failed to load initial engine config:', e);
     } finally {
@@ -29,7 +30,7 @@
   async function applySettings() {
     isApplying = true;
     try {
-      await invoke('configure_engine', { 
+      await invoke('configure_engine', {
         config: {
           threads,
           hashMb,
@@ -40,7 +41,7 @@
     } catch (e) {
       console.error('Failed to configure engine:', e);
     } finally {
-      setTimeout(() => (isApplying = false), 300); 
+      setTimeout(() => (isApplying = false), 300);
     }
   }
 </script>
@@ -51,13 +52,14 @@
       <label for="threads">Threads</label>
       <span class="setting-value">{threads}</span>
     </div>
-    <input 
-      type="range" 
-      id="threads" 
-      min="1" max="32" 
-      bind:value={threads} 
-      class="slider" 
-      disabled={isLoading} 
+    <input
+      type="range"
+      id="threads"
+      min="1"
+      max="32"
+      bind:value={threads}
+      class="slider"
+      disabled={isLoading}
       style="--progress: {((threads - 1) / 31) * 100}%"
     />
     <p class="setting-desc">Number of CPU threads Stockfish can use.</p>
@@ -68,12 +70,14 @@
       <label for="hash">Hash Size (MB)</label>
       <span class="setting-value">{hashMb} MB</span>
     </div>
-    <input 
-      type="range" 
-      id="hash" 
-      min="16" max="8192" step="16" 
-      bind:value={hashMb} 
-      class="slider" 
+    <input
+      type="range"
+      id="hash"
+      min="16"
+      max="8192"
+      step="16"
+      bind:value={hashMb}
+      class="slider"
       disabled={isLoading}
       style="--progress: {((hashMb - 16) / 8176) * 100}%"
     />
@@ -83,29 +87,36 @@
   <div class="setting-row">
     <div class="setting-group half">
       <label for="multipv">MultiPV</label>
-      <input 
-        type="number" 
-        id="multipv" 
-        min="1" max="5" 
-        bind:value={multiPv} 
-        class="number-input" 
-        disabled={isLoading} 
+      <input
+        type="number"
+        id="multipv"
+        min="1"
+        max="5"
+        bind:value={multiPv}
+        class="number-input"
+        disabled={isLoading}
       />
     </div>
     <div class="setting-group half">
       <label for="time">Time per Move (ms)</label>
-      <input 
-        type="number" 
-        id="time" 
-        min="100" max="10000" step="100" 
-        bind:value={analysisTimeMs} 
-        class="number-input" 
-        disabled={isLoading} 
+      <input
+        type="number"
+        id="time"
+        min="100"
+        max="10000"
+        step="100"
+        bind:value={analysisTimeMs}
+        class="number-input"
+        disabled={isLoading}
       />
     </div>
   </div>
 
-  <button class="apply-btn" on:click={applySettings} disabled={isApplying || isLoading}>
+  <button
+    class="apply-btn"
+    on:click={applySettings}
+    disabled={isApplying || isLoading}
+  >
     <Save size={18} strokeWidth={2.5} />
     {isApplying ? 'Applying...' : 'Apply Configuration'}
   </button>
@@ -121,7 +132,7 @@
     overflow-y: auto;
     transition: opacity 0.2s ease;
   }
-  
+
   .engine-settings.loading {
     opacity: 0.5;
     pointer-events: none;
@@ -175,10 +186,10 @@
     width: 100%;
     height: 6px;
     background: linear-gradient(
-      to right, 
-      #8be1b4 0%, 
-      #8be1b4 var(--progress), 
-      #111 var(--progress), 
+      to right,
+      #8be1b4 0%,
+      #8be1b4 var(--progress),
+      #111 var(--progress),
       #111 100%
     );
     border: 1px solid #333;
