@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
   import Save from 'lucide-svelte/icons/save';
+  import Info from 'lucide-svelte/icons/info';
 
   let threads = 4;
   let hashMb = 128;
@@ -18,10 +19,9 @@
       if (config.threads !== null) threads = config.threads;
       if (config.hashMb !== null) hashMb = config.hashMb;
       if (config.multiPv !== null) multiPv = config.multiPv;
-      if (config.analysisTimeMs !== null)
-        analysisTimeMs = config.analysisTimeMs;
+      if (config.analysisTimeMs !== null) analysisTimeMs = config.analysisTimeMs;
     } catch (e) {
-      console.error('Failed to load initial engine config:', e);
+      console.error(e);
     } finally {
       isLoading = false;
     }
@@ -39,7 +39,7 @@
         }
       });
     } catch (e) {
-      console.error('Failed to configure engine:', e);
+      console.error(e);
     } finally {
       setTimeout(() => (isApplying = false), 300);
     }
@@ -47,67 +47,101 @@
 </script>
 
 <div class="engine-settings" class:loading={isLoading}>
-  <div class="setting-group">
-    <div class="setting-header">
-      <label for="threads">Threads</label>
-      <span class="setting-value">{threads}</span>
+  <div class="setting-row">
+    <div class="setting-group half">
+      <div class="setting-header">
+        <label for="threads">Threads</label>
+        <div class="setting-value-group">
+          <span class="setting-value">{threads}</span>
+          <div class="info-container">
+            <Info size={14} strokeWidth={2.5} />
+            <div class="tooltip">Number of CPU threads Stockfish can use.</div>
+          </div>
+        </div>
+      </div>
+      <input
+        type="range"
+        id="threads"
+        min="1"
+        max="32"
+        bind:value={threads}
+        class="slider"
+        disabled={isLoading}
+        style="--progress: {((threads - 1) / 31) * 100}%"
+      />
     </div>
-    <input
-      type="range"
-      id="threads"
-      min="1"
-      max="32"
-      bind:value={threads}
-      class="slider"
-      disabled={isLoading}
-      style="--progress: {((threads - 1) / 31) * 100}%"
-    />
-    <p class="setting-desc">Number of CPU threads Stockfish can use.</p>
-  </div>
 
-  <div class="setting-group">
-    <div class="setting-header">
-      <label for="hash">Hash Size (MB)</label>
-      <span class="setting-value">{hashMb} MB</span>
+    <div class="setting-group half">
+      <div class="setting-header">
+        <label for="hash">Hash Size</label>
+        <div class="setting-value-group">
+          <span class="setting-value">{hashMb} MB</span>
+          <div class="info-container">
+            <Info size={14} strokeWidth={2.5} />
+            <div class="tooltip">Memory allocated for transposition tables.</div>
+          </div>
+        </div>
+      </div>
+      <input
+        type="range"
+        id="hash"
+        min="16"
+        max="8192"
+        step="16"
+        bind:value={hashMb}
+        class="slider"
+        disabled={isLoading}
+        style="--progress: {((hashMb - 16) / 8176) * 100}%"
+      />
     </div>
-    <input
-      type="range"
-      id="hash"
-      min="16"
-      max="8192"
-      step="16"
-      bind:value={hashMb}
-      class="slider"
-      disabled={isLoading}
-      style="--progress: {((hashMb - 16) / 8176) * 100}%"
-    />
-    <p class="setting-desc">Memory allocated for transposition tables.</p>
   </div>
 
   <div class="setting-row">
     <div class="setting-group half">
-      <label for="multipv">MultiPV</label>
+      <div class="setting-header">
+        <label for="multipv">MultiPV</label>
+        <div class="setting-value-group">
+          <span class="setting-value">{multiPv}</span>
+          <div class="info-container">
+            <Info size={14} strokeWidth={2.5} />
+            <div class="tooltip">Number of best lines (Principal Variations) to calculate.</div>
+          </div>
+        </div>
+      </div>
       <input
-        type="number"
+        type="range"
         id="multipv"
         min="1"
         max="5"
+        step="1"
         bind:value={multiPv}
-        class="number-input"
+        class="slider"
         disabled={isLoading}
+        style="--progress: {((multiPv - 1) / 4) * 100}%"
       />
     </div>
+    
     <div class="setting-group half">
-      <label for="time">Time per Move (ms)</label>
+      <div class="setting-header">
+        <label for="time">Time / Move</label>
+        <div class="setting-value-group">
+          <span class="setting-value">{analysisTimeMs}ms</span>
+          <div class="info-container">
+            <Info size={14} strokeWidth={2.5} />
+            <div class="tooltip">Maximum time the engine spends thinking per move.</div>
+          </div>
+        </div>
+      </div>
       <input
-        type="number"
+        type="range"
         id="time"
         min="100"
         max="10000"
-        step="100"
+        step="500"
         bind:value={analysisTimeMs}
-        class="number-input"
+        class="slider"
         disabled={isLoading}
+        style="--progress: {((analysisTimeMs - 100) / 9900) * 100}%"
       />
     </div>
   </div>
@@ -159,6 +193,12 @@
     align-items: center;
   }
 
+  .setting-value-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
   label {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 1.1rem;
@@ -173,11 +213,49 @@
     font-weight: 600;
   }
 
-  .setting-desc {
-    font-size: 0.75rem;
+  .info-container {
+    position: relative;
+    display: flex;
+    align-items: center;
     color: #777;
-    margin: 0;
+    cursor: help;
+    transition: color 0.2s ease;
+  }
+
+  .info-container:hover {
+    color: #8be1b4;
+    z-index: 50;
+  }
+
+  .tooltip {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 8px;
+    width: max-content;
+    max-width: 180px;
+    background: #111;
+    color: #ececec;
+    padding: 0.5rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-family: 'Outfit', sans-serif;
     line-height: 1.3;
+    border: 1px solid #333;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.4);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    z-index: 50;
+    text-align: left;
+    transform: translateY(-4px);
+  }
+
+  .info-container:hover .tooltip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
   }
 
   .slider {
@@ -227,39 +305,6 @@
   .slider:disabled::-webkit-slider-thumb,
   .slider:disabled::-moz-range-thumb {
     background: #555;
-    cursor: not-allowed;
-  }
-
-  .number-input {
-    -moz-appearance: textfield;
-    appearance: textfield;
-    background: #111;
-    border: 1px solid #333;
-    color: #ececec;
-    font-family: 'Outfit', sans-serif;
-    font-size: 1rem;
-    padding: 0.5rem;
-    border-radius: 6px;
-    width: 100%;
-    box-sizing: border-box;
-    outline: none;
-    transition: border-color 0.2s;
-  }
-
-  .number-input::-webkit-outer-spin-button,
-  .number-input::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    appearance: none;
-    margin: 0;
-  }
-
-  .number-input:focus {
-    border-color: #555;
-  }
-
-  .number-input:disabled {
-    color: #555;
-    background: #0a0a0a;
     cursor: not-allowed;
   }
 
