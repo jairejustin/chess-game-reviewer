@@ -5,9 +5,16 @@
   import '@fontsource/bebas-neue';
   // @ts-ignore
   import '@fontsource-variable/outfit';
+  
+  import GlobalNav from '$lib/components/ui/GlobalNav.svelte';
 </script>
 
-<slot />
+<div class="app-root">
+  <GlobalNav />
+  <div class="app-content">
+    <slot />
+  </div>
+</div>
 
 <style>
   :global(body) {
@@ -15,9 +22,21 @@
     color: #ececec;
     font-family: 'Outfit', system-ui, sans-serif;
     margin: 0;
+    overflow: hidden;
   }
 
-  /* Chessground Overrides */
+  .app-root {
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  .app-content {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    position: relative;
+  }
   :global(.cg-wrap svg.cg-shapes) {
     z-index: 1 !important;
   }
