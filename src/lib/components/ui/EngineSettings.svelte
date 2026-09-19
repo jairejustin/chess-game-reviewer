@@ -3,19 +3,18 @@
   import { invoke } from '@tauri-apps/api/core';
   import Save from 'lucide-svelte/icons/save';
   import Info from 'lucide-svelte/icons/info';
+  import RotateCcw from 'lucide-svelte/icons/rotate-ccw';
 
   let threads = 4;
   let hashMb = 128;
   let multiPv = 3;
   let analysisTimeMs = 1500;
-
   let isApplying = false;
   let isLoading = true;
 
   onMount(async () => {
     try {
       const config: any = await invoke('get_engine_config');
-
       if (config.threads !== null) threads = config.threads;
       if (config.hashMb !== null) hashMb = config.hashMb;
       if (config.multiPv !== null) multiPv = config.multiPv;
@@ -43,6 +42,13 @@
     } finally {
       setTimeout(() => (isApplying = false), 300);
     }
+  }
+
+  function resetToDefaults() {
+    threads = 4;
+    hashMb = 128;
+    multiPv = 3;
+    analysisTimeMs = 1500;
   }
 </script>
 
@@ -120,7 +126,7 @@
         style="--progress: {((multiPv - 1) / 4) * 100}%"
       />
     </div>
-    
+
     <div class="setting-group half">
       <div class="setting-header">
         <label for="time">Time / Move</label>
@@ -146,14 +152,25 @@
     </div>
   </div>
 
-  <button
-    class="apply-btn"
-    on:click={applySettings}
-    disabled={isApplying || isLoading}
-  >
-    <Save size={18} strokeWidth={2.5} />
-    {isApplying ? 'Applying...' : 'Apply Configuration'}
-  </button>
+  <div class="settings-actions">
+    <button
+      class="action-btn reset-btn"
+      on:click={resetToDefaults}
+      disabled={isLoading || isApplying}
+      title="Reset to Defaults"
+    >
+      <RotateCcw size={20} strokeWidth={2.5} />
+    </button>
+    
+    <button
+      class="action-btn apply-btn"
+      on:click={applySettings}
+      disabled={isApplying || isLoading}
+      title={isApplying ? 'Applying...' : 'Apply Configuration'}
+    >
+      <Save size={20} strokeWidth={2.5} />
+    </button>
+  </div>
 </div>
 
 <style>
@@ -308,32 +325,43 @@
     cursor: not-allowed;
   }
 
-  .apply-btn {
+  .settings-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    align-self: flex-end;
+    flex-shrink: 0;
+  }
+
+  .action-btn {
     background: #232326;
     border: 1px solid #333;
     color: #ececec;
-    padding: 0.8rem 1rem;
+    
+    width: 42px !important;
+    min-width: 42px !important;
+    height: 42px !important;
+    padding: 0 !important;
+    
     border-radius: 8px;
     cursor: pointer;
-    font-family: 'Outfit', sans-serif;
-    font-weight: 600;
-    font-size: 1rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.5rem;
     transition: all 0.2s ease;
-    margin-top: auto;
+    flex-shrink: 0;
   }
 
-  .apply-btn:hover:not(:disabled) {
+  .action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .apply-btn:hover:not(:disabled),
+  .reset-btn:hover:not(:disabled) {
     background: #1b382b;
     border-color: #2b5743;
     color: #8be1b4;
   }
 
-  .apply-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
 </style>
