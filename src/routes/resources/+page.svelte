@@ -5,7 +5,7 @@
   <header class="flat-header">
     <h1>Resource Manager</h1>
   </header>
-  
+
   <section class="flat-content">
     <p>To Do: Engine binaries and opening book download manager</p>
   </section>

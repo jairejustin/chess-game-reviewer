@@ -6,7 +6,7 @@
   <header class="flat-header">
     <h1>General Settings</h1>
   </header>
-  
+
   <section class="flat-content settings-grid">
     <div class="settings-widget engine-widget">
       <header class="widget-header">
@@ -57,7 +57,7 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 1.5rem;
-    grid-auto-flow: dense; 
+    grid-auto-flow: dense;
     align-items: start;
   }
 

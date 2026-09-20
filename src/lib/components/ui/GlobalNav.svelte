@@ -9,24 +9,41 @@
   <div class="nav-group">
     <button
       class="nav-btn"
-      class:nav-btn--active={page.url.pathname.startsWith('/review') || page.url.pathname.startsWith('/explorer')}
+      class:nav-btn--active={page.url.pathname.startsWith('/review') ||
+        page.url.pathname.startsWith('/explorer')}
       on:click={() => goto('/review')}
       title="Analysis Workspace"
     >
       <!-- Custom Checkerboard SVG -->
-      <svg 
-        width="26" 
-        height="26" 
-        viewBox="0 0 24 24" 
-        fill="none" 
-        stroke="currentColor" 
-        stroke-width="2" 
-        stroke-linecap="round" 
+      <svg
+        width="26"
+        height="26"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
         stroke-linejoin="round"
       >
         <rect x="3" y="3" width="18" height="18" rx="2.5" />
-        <rect x="3" y="3" width="9" height="9" fill="currentColor" stroke="none" rx="1" />
-        <rect x="12" y="12" width="9" height="9" fill="currentColor" stroke="none" rx="1" />
+        <rect
+          x="3"
+          y="3"
+          width="9"
+          height="9"
+          fill="currentColor"
+          stroke="none"
+          rx="1"
+        />
+        <rect
+          x="12"
+          y="12"
+          width="9"
+          height="9"
+          fill="currentColor"
+          stroke="none"
+          rx="1"
+        />
       </svg>
     </button>
     <button
@@ -82,7 +99,10 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+    transition:
+      color 0.15s ease,
+      background 0.15s ease,
+      border-color 0.15s ease;
     border-radius: 0;
   }
 
