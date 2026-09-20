@@ -18,7 +18,8 @@
       if (config.threads !== null) threads = config.threads;
       if (config.hashMb !== null) hashMb = config.hashMb;
       if (config.multiPv !== null) multiPv = config.multiPv;
-      if (config.analysisTimeMs !== null) analysisTimeMs = config.analysisTimeMs;
+      if (config.analysisTimeMs !== null)
+        analysisTimeMs = config.analysisTimeMs;
     } catch (e) {
       console.error(e);
     } finally {
@@ -84,7 +85,9 @@
           <span class="setting-value">{hashMb} MB</span>
           <div class="info-container">
             <Info size={14} strokeWidth={2.5} />
-            <div class="tooltip">Memory allocated for transposition tables.</div>
+            <div class="tooltip">
+              Memory allocated for transposition tables.
+            </div>
           </div>
         </div>
       </div>
@@ -110,7 +113,9 @@
           <span class="setting-value">{multiPv}</span>
           <div class="info-container">
             <Info size={14} strokeWidth={2.5} />
-            <div class="tooltip">Number of best lines (Principal Variations) to calculate.</div>
+            <div class="tooltip">
+              Number of best lines (Principal Variations) to calculate.
+            </div>
           </div>
         </div>
       </div>
@@ -134,7 +139,9 @@
           <span class="setting-value">{analysisTimeMs}ms</span>
           <div class="info-container">
             <Info size={14} strokeWidth={2.5} />
-            <div class="tooltip">Maximum time the engine spends thinking per move.</div>
+            <div class="tooltip">
+              Maximum time the engine spends thinking per move.
+            </div>
           </div>
         </div>
       </div>
@@ -161,7 +168,7 @@
     >
       <RotateCcw size={20} strokeWidth={2.5} />
     </button>
-    
+
     <button
       class="action-btn apply-btn"
       on:click={applySettings}
@@ -259,11 +266,13 @@
     font-family: 'Outfit', sans-serif;
     line-height: 1.3;
     border: 1px solid #333;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.4);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
-    transition: opacity 0.2s ease, transform 0.2s ease;
+    transition:
+      opacity 0.2s ease,
+      transform 0.2s ease;
     z-index: 50;
     text-align: left;
     transform: translateY(-4px);
@@ -337,12 +346,12 @@
     background: #232326;
     border: 1px solid #333;
     color: #ececec;
-    
+
     width: 42px !important;
     min-width: 42px !important;
     height: 42px !important;
     padding: 0 !important;
-    
+
     border-radius: 8px;
     cursor: pointer;
     display: flex;
@@ -363,5 +372,4 @@
     border-color: #2b5743;
     color: #8be1b4;
   }
-
 </style>

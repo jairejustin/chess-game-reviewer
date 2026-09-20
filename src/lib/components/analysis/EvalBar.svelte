@@ -1,11 +1,9 @@
 <script lang="ts">
   import { isFlipped } from '$lib/stores/boardStore';
-  import { formatEval } from '$lib/utils/ui';
+  import { formatEval, getPerspectiveEvalColor } from '$lib/utils/ui';
 
   export let eval_cp: number = 0;
-
   export let mateIn: number | null = null;
-
   export let active: boolean = false;
 
   function winPercent(cp: number): number {
@@ -14,7 +12,8 @@
 
   $: whitePercent = active ? winPercent(eval_cp) : 50;
   $: blackPercent = 100 - whitePercent;
-  $: displayEval = active ? formatEval(eval_cp, mateIn) : '–';
+  $: displayEval = active ? formatEval(eval_cp, mateIn) : '';
+  $: evalColor = getPerspectiveEvalColor(eval_cp, mateIn, $isFlipped);
 </script>
 
 <div class="eval-bar" aria-label="Evaluation bar, {displayEval}">
@@ -29,12 +28,7 @@
       style="flex: {whitePercent}"
     ></div>
   </div>
-
-  <span
-    class="eval-bar__label"
-    class:eval-bar__label--winning={active && eval_cp > 0}
-    class:eval-bar__label--losing={active && eval_cp < 0}
-  >
+  <span class="eval-bar__label eval-text--{evalColor}">
     {displayEval}
   </span>
 </div>
@@ -49,7 +43,6 @@
     flex-shrink: 0;
     height: 100%;
   }
-
   .eval-bar__track {
     width: 24px;
     flex: 1;
@@ -60,44 +53,29 @@
     background: #1a1a1a;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
   }
-
   .eval-bar__segment {
     transition: flex 0.4s cubic-bezier(0.25, 1, 0.5, 1);
     min-height: 0;
   }
-
   .eval-bar__segment--black {
     background: #1e1e1e;
   }
-
   .eval-bar__segment--white {
     background: #f0ede8;
   }
-
   .eval-bar__divider {
     height: 3px;
     flex-shrink: 0;
     background: rgba(255, 255, 255, 0.2);
   }
-
   .eval-bar__label {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 1.35rem;
-    color: #888;
     letter-spacing: 0.5px;
     width: 56px;
     text-align: center;
     display: inline-block;
   }
-
-  .eval-bar__label--winning {
-    color: #95bb4a;
-  }
-
-  .eval-bar__label--losing {
-    color: #e06060;
-  }
-
   .eval-bar__track--flipped {
     flex-direction: column-reverse;
   }

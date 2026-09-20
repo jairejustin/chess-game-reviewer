@@ -1,10 +1,19 @@
 <script lang="ts">
-  import { moves, activePly } from '../../stores/boardStore';
-  import { tallyLabels, formatEval } from '../../utils/ui';
+  import { moves, activePly, isFlipped } from '../../stores/boardStore';
+  import {
+    tallyLabels,
+    formatEval,
+    getPerspectiveEvalColor
+  } from '../../utils/ui';
   import Figurine from '../ui/Figurine.svelte';
   import Badge from '../ui/Badge.svelte';
 
   $: currentMove = $moves[$activePly];
+  $: evalColor = getPerspectiveEvalColor(
+    currentMove.playedEval ?? 0,
+    currentMove.mateIn,
+    $isFlipped
+  );
 </script>
 
 {#if currentMove && currentMove.ply > 0 && currentMove.classification}
@@ -15,14 +24,13 @@
         {tallyLabels[currentMove.classification]}
       </span>
     </div>
-
     <div class="engine-feedback__comparison">
       <div class="engine-line">
         <span class="engine-line__label">Played:</span>
         <span class="engine-line__move">
           <Figurine san={currentMove.san} />
         </span>
-        <span class="engine-line__eval">
+        <span class="engine-line__eval eval-text--{evalColor}">
           {formatEval(currentMove.playedEval ?? 0, currentMove.mateIn)}
         </span>
       </div>
@@ -33,7 +41,7 @@
           <span class="engine-line__move">
             <Figurine san={currentMove.bestMoveSan} />
           </span>
-          <span class="engine-line__eval">
+          <span class="engine-line__eval eval-text--{evalColor}">
             {formatEval(currentMove.prevBestEval ?? 0, currentMove.bestMateIn)}
           </span>
         </div>

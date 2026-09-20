@@ -1,13 +1,13 @@
 <script lang="ts">
   import type { PVLine } from '$lib/types/game';
   import { enterVariationFromPV } from '$lib/stores/explorerStore';
+  import { isFlipped } from '$lib/stores/boardStore';
+  import { getPerspectiveEvalColor } from '$lib/utils/ui';
   import Figurine from '$lib/components/ui/Figurine.svelte';
 
   export let lines: PVLine[] = [];
-
   export let active: boolean = true;
   export let depth: number = 0;
-
   export let status: 'thinking' | 'paused' | 'starting' = 'thinking';
 
   $: isTerminal = status === 'paused' && lines.length === 0;
@@ -17,24 +17,11 @@
     if (line.uciMoves.length === 0) return;
     enterVariationFromPV(line);
   }
-
-  function evalClass(evalStr: string): string {
-    if (evalStr.startsWith('-M')) return 'eval--mate-black';
-    if (evalStr.includes('M')) return 'eval--mate-white';
-
-    const n = parseFloat(evalStr);
-    if (isNaN(n)) return '';
-    if (n >= 1.5) return 'eval--winning';
-    if (n <= -1.5) return 'eval--losing';
-
-    return 'eval--equal';
-  }
 </script>
 
 <div class="multipv">
   <div class="multipv__header">
     <span class="multipv__label">Engine Lines</span>
-
     {#if active && (status === 'thinking' || status === 'starting')}
       <span class="multipv__depth">
         DEPTH {depth}
@@ -63,23 +50,26 @@
           disabled={!active || line.sanMoves.length === 0}
           title="Load this line into the explorer"
         >
-          <span class="multipv__eval {evalClass(line.evaluation)}">
+          <span
+            class="multipv__eval eval-text--{getPerspectiveEvalColor(
+              line.evalCp,
+              line.mateIn,
+              $isFlipped
+            )}"
+          >
             {line.evaluation}
           </span>
-
           {#if line.sanMoves.length > 0}
             <span class="multipv__first-move">
               <Figurine san={line.sanMoves[0]} />
             </span>
           {/if}
-
           <span class="multipv__moves">
             {#each line.sanMoves.slice(1, 5) as san}
               <span class="multipv__move">
                 <Figurine {san} />
               </span>
             {/each}
-
             {#if line.sanMoves.length > 5}
               <span class="multipv__overflow">+{line.sanMoves.length - 5}</span>
             {/if}
@@ -96,14 +86,12 @@
     flex-direction: column;
     gap: 0;
   }
-
   .multipv__depth {
     font-family: 'Bebas Neue', sans-serif;
     font-weight: bold;
     letter-spacing: 1px;
     color: #ffffff;
   }
-
   .multipv__header {
     display: flex;
     justify-content: space-between;
@@ -111,7 +99,6 @@
     padding: 0.6rem 1rem 0.4rem;
     border-bottom: 1px solid #2a2a2e;
   }
-
   .multipv__label {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 0.95rem;
@@ -119,12 +106,10 @@
     color: #666;
     text-transform: uppercase;
   }
-
   .multipv__lines {
     display: flex;
     flex-direction: column;
   }
-
   .multipv__terminal {
     display: flex;
     align-items: center;
@@ -134,12 +119,10 @@
     font-family: 'Outfit', sans-serif;
     font-size: 0.85rem;
   }
-
   .multipv__terminal-text {
     font-style: italic;
     letter-spacing: 0.2px;
   }
-
   .multipv__line {
     display: flex;
     align-items: center;
@@ -155,24 +138,19 @@
     transition: background 0.12s ease;
     width: 100%;
   }
-
   .multipv__line:hover:not(:disabled) {
     background: #1e2a22;
   }
-
   .multipv__line:disabled {
     cursor: default;
   }
-
   .multipv__line--best {
     background: rgba(139, 225, 180, 0.03);
   }
-
   .multipv__line--skeleton {
     pointer-events: none;
     cursor: default;
   }
-
   .multipv__eval {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 1.1rem;
@@ -180,7 +158,6 @@
     min-width: 48px;
     flex-shrink: 0;
   }
-
   .multipv__first-move {
     font-family: 'Outfit', sans-serif;
     font-size: 1.2rem;
@@ -193,7 +170,6 @@
     display: inline-flex;
     flex-shrink: 0;
   }
-
   .multipv__moves {
     display: flex;
     flex-wrap: wrap;
@@ -204,27 +180,9 @@
     min-width: 0;
     overflow: hidden;
   }
-
-  .eval--winning {
-    color: #95bb4a;
-  }
-  .eval--losing {
-    color: #e06060;
-  }
-  .eval--equal {
-    color: #aaa;
-  }
-  .eval--mate-white {
-    color: #8be1b4;
-  }
-  .eval--mate-black {
-    color: #e06060;
-  }
-
   .multipv__move {
     white-space: nowrap;
   }
-
   .multipv__overflow {
     font-size: 0.8rem;
     color: #555;
@@ -239,7 +197,6 @@
     background-size: 200% 100%;
     animation: shimmer 1.4s infinite;
   }
-
   .skeleton__moves {
     flex: 1;
     height: 14px;
