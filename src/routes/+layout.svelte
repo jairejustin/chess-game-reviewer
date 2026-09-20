@@ -5,7 +5,7 @@
   import '@fontsource/bebas-neue';
   // @ts-ignore
   import '@fontsource-variable/outfit';
-  
+
   import GlobalNav from '$lib/components/ui/GlobalNav.svelte';
 </script>
 
@@ -37,18 +37,16 @@
     height: 100%;
     position: relative;
   }
+
   :global(.cg-wrap svg.cg-shapes) {
     z-index: 1 !important;
   }
-
   :global(.cg-wrap piece) {
     z-index: 2 !important;
   }
-
   :global(.cg-wrap piece.dragging) {
     z-index: 10 !important;
   }
-
   :global(.cg-wrap svg.cg-custom-svgs) {
     z-index: 3 !important;
     overflow: visible !important;
@@ -73,7 +71,6 @@
   :global(.cg-wrap piece.king.white) {
     background-image: url('/assets/pieces/maestro/wK.svg');
   }
-
   :global(.cg-wrap piece.pawn.black) {
     background-image: url('/assets/pieces/maestro/bP.svg');
   }
@@ -101,9 +98,26 @@
     animation: badge-pop-in 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.1s
       both;
   }
-
   :global(.spin) {
     animation: spin 1s linear infinite;
+  }
+
+  :global(.eval-text--winning) {
+    color: #95bb4a;
+  }
+  :global(.eval-text--losing) {
+    color: #e06060;
+  }
+  :global(.eval-text--equal) {
+    color: #888888;
+  }
+  :global(.eval-text--mate-winning) {
+    color: #8be1b4;
+    text-shadow: 0 0 8px rgba(139, 225, 180, 0.4);
+  }
+  :global(.eval-text--mate-losing) {
+    color: #ff7769;
+    text-shadow: 0 0 8px rgba(255, 119, 105, 0.4);
   }
 
   @keyframes spin {
@@ -111,7 +125,6 @@
       transform: rotate(360deg);
     }
   }
-
   @keyframes badge-pop-in {
     0% {
       opacity: 0;

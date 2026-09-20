@@ -47,3 +47,21 @@ export function formatAccuracy(score: number): string {
 export function activeTallyRows(w: MoveCounts, b: MoveCounts): MoveBadge[] {
   return tallyOrder.filter((c) => (w[c] ?? 0) > 0 || (b[c] ?? 0) > 0);
 }
+
+export function getPerspectiveEvalColor(
+  cp: number,
+  mateIn: number | null | undefined,
+  isFlipped: boolean
+): string {
+  if (mateIn != null && mateIn !== 0) {
+    const isWhiteMating = mateIn > 0;
+    const isWinning = isFlipped ? !isWhiteMating : isWhiteMating;
+    return isWinning ? 'mate-winning' : 'mate-losing';
+  }
+
+  if (cp === 0) return 'equal';
+
+  const isWhiteWinning = cp > 0;
+  const isWinning = isFlipped ? !isWhiteWinning : isWhiteWinning;
+  return isWinning ? 'winning' : 'losing';
+}
