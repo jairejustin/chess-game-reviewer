@@ -44,7 +44,12 @@ pub fn analyze_game(
         });
 
     // Clone the paths/arcs for the background thread
-    let engine_path = state.engine_path.clone();
+    let engine_path = state
+        .store
+        .active_engine_path()
+        .ok_or("No engine installed")?
+        .to_string_lossy()
+        .to_string();
     let book = state.opening_book.clone();
     let config = state.engine_config.clone();
 
@@ -181,11 +186,13 @@ pub async fn toggle_live_engine(
     app_state: State<'_, AppState>,
 ) -> Result<(), String> {
     let cmd = if start {
-        LiveCommand::Start {
-            binary_path: app_state
-                .engine_path
-                .clone(),
-        }
+        let path = app_state
+            .store
+            .active_engine_path()
+            .ok_or("No engine installed")?
+            .to_string_lossy()
+            .to_string();
+        LiveCommand::Start { binary_path: path }
     } else {
         LiveCommand::Terminate
     };

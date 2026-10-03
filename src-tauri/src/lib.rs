@@ -3,6 +3,7 @@ mod data;
 mod heuristics;
 mod models;
 mod pipeline;
+mod resources;
 mod uci;
 
 use crate::commands::{
@@ -14,13 +15,14 @@ use crate::commands::{
 };
 use crate::data::book::OpeningBook;
 use crate::models::engine_config::EngineConfig;
+use crate::resources::store::ResourceStore;
 use crate::uci::live_manager::init_live_manager;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
 pub struct AppState {
-    pub engine_path: String,
+    pub store: Arc<ResourceStore>,
     pub opening_book: Arc<OpeningBook>,
     pub cancel_analysis_flag: Arc<AtomicBool>,
     /// Single source of truth for engine settings.
@@ -34,30 +36,23 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            let current_dir =
-                std::env::current_dir().unwrap();
+            let store = Arc::new(ResourceStore::open(app.handle())?);
+            #[cfg(debug_assertions)]
+            store.seed_dev_resources();
 
-            let engine_path = current_dir
-                .join(
-                    "core/engine/stockfish-ubuntu-x86-64-bmi2",
-                )
-                .to_string_lossy()
-                .to_string();
+            let book_path = store
+                .active_book_path()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_default();
 
-            let book_path = current_dir
-                .join("core/database/book.bin")
-                .to_string_lossy()
-                .to_string();
-
-            let opening_book =
-                Arc::new(OpeningBook::new(&book_path));
+            let opening_book = Arc::new(OpeningBook::new(&book_path));
 
             let engine_config = Arc::new(Mutex::new(
                 EngineConfig::default(),
             ));
 
             app.manage(AppState {
-                engine_path,
+                store,
                 opening_book,
                 cancel_analysis_flag: Arc::new(
                     AtomicBool::new(false),
