@@ -324,8 +324,11 @@ fn centipawn_base_classification(
     win_loss: f64,
     is_best_engine_move: bool,
 ) -> MoveBadge {
-    if prev_eval.abs() > 1000
-        && played_eval.abs() > 1000
+    let still_winning = prev_eval.abs() > 1000
+    && played_eval.abs() > 1000
+    && prev_eval.signum() == played_eval.signum();
+
+    if still_winning 
     {
         if delta <= 0 || is_best_engine_move {
             MoveBadge::Best
@@ -934,5 +937,17 @@ mod tests {
             classify(args).0,
             MoveBadge::Blunder
         );
+    }
+
+    #[test]
+    fn winning_to_losing_swing_is_a_blunder() {
+        let (badge, _) = classify(ClassifyArgs {
+            prev_eval: 1500,
+            played_eval: -1500,
+            prev_best_eval: 1500,
+            multi_pv_evals: &[1500, -200],
+            ..Default::default()
+        });
+        assert_eq!(badge, MoveBadge::Blunder);
     }
 }
